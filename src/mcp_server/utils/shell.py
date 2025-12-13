@@ -11,8 +11,16 @@ logger: Logger = configure_logging(__name__)
 
 
 def run_command(command: Sequence[str]) -> CommandResult:
-    """
-    Execute a command and normalize output without raising on non-zero exit codes.
+    """Execute a command and normalize its output.
+
+    Args:
+        command: Command and arguments to execute. Elements are shell-escaped for logging.
+
+    Returns:
+        Structured output containing stdout, stderr, and return code.
+
+    References:
+        - subprocess.run: https://docs.python.org/3/library/subprocess.html#subprocess.run
     """
     command_str: str = " ".join(shlex.quote(part) for part in command)
     completed: CompletedProcess[str] = subprocess.run(

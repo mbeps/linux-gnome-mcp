@@ -4,8 +4,12 @@ from pydantic import BaseModel, Field
 
 
 class SystemMetrics(BaseModel):
-    """
-    Snapshot of system resource usage.
+    """Snapshot of resource usage used to assess host health.
+
+    Attributes:
+        cpu_percent: Current CPU load percentage (0-100).
+        memory_gb: RAM usage in gigabytes as reported by the OS.
+        process_count: Number of running processes at sample time.
     """
 
     cpu_percent: float = Field(..., description="Current CPU load percentage (0-100).")
@@ -14,8 +18,11 @@ class SystemMetrics(BaseModel):
 
 
 class AnalysisResult(BaseModel):
-    """
-    Structured result for system health analysis.
+    """Structured result for system health analysis.
+
+    Attributes:
+        status: Health rating used to drive follow-up actions.
+        recommendation: Optional remediation text for non-healthy states.
     """
 
     status: Literal["healthy", "warning", "critical"] = Field(
@@ -27,8 +34,14 @@ class AnalysisResult(BaseModel):
 
 
 class CommandResult(BaseModel):
-    """
-    Normalized output from a shell command invocation.
+    """Normalized output from a shell command invocation.
+
+    Attributes:
+        success: True when the command exit code is 0.
+        command: The executed command string with arguments quoted.
+        stdout: Captured standard output with trailing whitespace trimmed.
+        stderr: Captured standard error with trailing whitespace trimmed.
+        returncode: Raw process return code from ``subprocess``.
     """
 
     success: bool = Field(..., description="True when the command exit code is 0.")
@@ -39,8 +52,13 @@ class CommandResult(BaseModel):
 
 
 class ApplicationInfo(BaseModel):
-    """
-    Minimal representation of an installed application discovered via .desktop files.
+    """Installed application discovered via ``.desktop`` files.
+
+    Attributes:
+        desktop_id: Desktop file identifier, e.g. ``org.gnome.Nautilus.desktop``.
+        name: Human-readable application name from the desktop file.
+        exec_cmd: Raw Exec command from the desktop file, if present.
+        source: Directory where the desktop file was found.
     """
 
     desktop_id: str = Field(..., description="Desktop file identifier, e.g. org.gnome.Nautilus.desktop.")
@@ -50,8 +68,15 @@ class ApplicationInfo(BaseModel):
 
 
 class SystemDetails(BaseModel):
-    """
-    High-level system information snapshot.
+    """High-level system information snapshot.
+
+    Attributes:
+        kernel_version: Running kernel version.
+        os_name: Operating system name.
+        os_version: Operating system version or codename.
+        uptime: Human-readable uptime string (``uptime -p``).
+        memory: Memory usage summary (``free -h`` output).
+        storage: Block devices summary (``lsblk`` output).
     """
 
     kernel_version: str = Field(..., description="Running kernel version.")

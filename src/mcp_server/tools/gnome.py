@@ -21,8 +21,19 @@ DESKTOP_PATHS: list[Path] = [
 
 
 def set_color_scheme(preference: Literal["default", "prefer-dark"]) -> str:
-    """
-    Toggle GNOME's color scheme using gsettings.
+    """Update GNOME's color scheme via ``gsettings``.
+
+    Args:
+        preference: ``"default"`` follows the system accent; ``"prefer-dark"`` forces dark mode.
+
+    Returns:
+        Confirmation message after the schema update.
+
+    Raises:
+        RuntimeError: If the underlying ``gsettings`` command fails.
+
+    References:
+        - GNOME color-scheme key: https://wiki.gnome.org/Initiatives/Wayland/ColorManagement#User-facing_APIs
     """
     result: CommandResult = run_command(
         ["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", preference]
@@ -39,16 +50,33 @@ def set_wallpaper_mode(
         "none", "wallpaper", "centered", "scaled", "stretched", "zoom", "spanned"
     ],
 ) -> str:
-    """
-    Update how the wallpaper is rendered (zoom, centered, spanned, etc.).
+    """Control how the wallpaper is rendered.
+
+    Args:
+        option: Rendering strategy supported by ``org.gnome.desktop.background/picture-options``.
+
+    Returns:
+        Confirmation message describing the new mode.
+
+    Raises:
+        RuntimeError: If the ``gsettings`` write fails.
     """
     _gsettings_set("org.gnome.desktop.background", "picture-options", option)
     return f"Wallpaper rendering set to {option}."
 
 
 def set_wallpaper(image_path: str) -> str:
-    """
-    Update wallpaper for both light and dark keys to keep them in sync.
+    """Update wallpaper for both light and dark variants.
+
+    Args:
+        image_path: Path to the image file; ``~`` is expanded and the file must exist.
+
+    Returns:
+        URI used for both ``picture-uri`` and ``picture-uri-dark`` keys.
+
+    Raises:
+        ValueError: If the provided image cannot be found.
+        RuntimeError: If a ``gsettings`` call fails.
     """
     resolved: Path = Path(image_path).expanduser().resolve()
     if not resolved.is_file():
@@ -66,16 +94,32 @@ def set_wallpaper(image_path: str) -> str:
 
 
 def set_gtk_theme(theme: str) -> str:
-    """
-    Set the GTK theme for legacy/non-libadwaita applications.
+    """Set the GTK theme for legacy/non-libadwaita applications.
+
+    Args:
+        theme: GTK theme name available in ``/usr/share/themes`` or ``~/.themes``.
+
+    Returns:
+        Confirmation string for the applied theme.
+
+    Raises:
+        RuntimeError: If the ``gsettings`` write fails.
     """
     _gsettings_set("org.gnome.desktop.interface", "gtk-theme", theme)
     return f"GTK theme set to {theme}."
 
 
 def set_icon_theme(icon_theme: str) -> str:
-    """
-    Set the icon theme.
+    """Set the icon theme.
+
+    Args:
+        icon_theme: Icon theme name discoverable by GNOME.
+
+    Returns:
+        Confirmation string for the applied icon theme.
+
+    Raises:
+        RuntimeError: If the ``gsettings`` write fails.
     """
     _gsettings_set("org.gnome.desktop.interface", "icon-theme", icon_theme)
     return f"Icon theme set to {icon_theme}."
@@ -84,8 +128,17 @@ def set_icon_theme(icon_theme: str) -> str:
 def set_font(
     font_type: Literal["interface", "monospace", "document"], font_value: str
 ) -> str:
-    """
-    Update GNOME font preferences (interface, monospace, or document).
+    """Update GNOME font preferences (interface, monospace, or document).
+
+    Args:
+        font_type: Which font category to adjust (interface, monospace, document).
+        font_value: Full font spec, e.g. ``'Cantarell 11'``.
+
+    Returns:
+        Confirmation of the updated font.
+
+    Raises:
+        RuntimeError: If the ``gsettings`` write fails.
     """
     key = {
         "interface": "font-name",
@@ -97,8 +150,17 @@ def set_font(
 
 
 def set_text_scaling(factor: float) -> str:
-    """
-    Adjust the global text scaling factor (commonly for HiDPI displays).
+    """Adjust the global text scaling factor.
+
+    Args:
+        factor: Scaling multiplier; values greater than 1.0 enlarge text.
+
+    Returns:
+        Confirmation string with the applied factor.
+
+    Raises:
+        ValueError: If ``factor`` is not greater than zero.
+        RuntimeError: If the ``gsettings`` write fails.
     """
     if factor <= 0:
         raise ValueError("Scaling factor must be greater than zero.")
@@ -107,8 +169,19 @@ def set_text_scaling(factor: float) -> str:
 
 
 def set_night_light(enabled: bool) -> str:
-    """
-    Enable or disable Night Light.
+    """Enable or disable Night Light.
+
+    Args:
+        enabled: ``True`` turns Night Light on, ``False`` turns it off.
+
+    Returns:
+        Confirmation string describing the new state.
+
+    Raises:
+        RuntimeError: If the ``gsettings`` call fails.
+
+    References:
+        - Night Light schema: https://gitlab.gnome.org/GNOME/gnome-settings-daemon/-/blob/main/plugins/color/gsd-color-plugin.c
     """
     value = "true" if enabled else "false"
     result: CommandResult = run_command(
@@ -128,8 +201,17 @@ def set_night_light(enabled: bool) -> str:
 
 
 def set_night_light_temperature(kelvin: int) -> str:
-    """
-    Configure the Night Light temperature in Kelvin.
+    """Configure the Night Light temperature.
+
+    Args:
+        kelvin: Desired color temperature between 1000 and 10000.
+
+    Returns:
+        Confirmation string with the applied temperature.
+
+    Raises:
+        ValueError: If the temperature is outside the supported range.
+        RuntimeError: If the ``gsettings`` write fails.
     """
     if kelvin < 1000 or kelvin > 10000:
         raise ValueError(
@@ -144,8 +226,16 @@ def set_night_light_temperature(kelvin: int) -> str:
 
 
 def set_night_light_schedule_automatic(enabled: bool) -> str:
-    """
-    Toggle automatic Night Light scheduling.
+    """Toggle automatic Night Light scheduling.
+
+    Args:
+        enabled: ``True`` follows location-based sunrise/sunset; ``False`` disables auto scheduling.
+
+    Returns:
+        Confirmation string with the new scheduling mode.
+
+    Raises:
+        RuntimeError: If the ``gsettings`` write fails.
     """
     _gsettings_set(
         "org.gnome.settings-daemon.plugins.color",
@@ -156,8 +246,18 @@ def set_night_light_schedule_automatic(enabled: bool) -> str:
 
 
 def set_night_light_schedule(start_hour: float, end_hour: float) -> str:
-    """
-    Set a manual Night Light schedule in 24-hour time.
+    """Set a manual Night Light schedule in 24-hour time.
+
+    Args:
+        start_hour: Start of the warm color period (0-24).
+        end_hour: End of the warm color period (0-24).
+
+    Returns:
+        Confirmation string describing the schedule.
+
+    Raises:
+        ValueError: If either hour is outside the range [0, 24].
+        RuntimeError: If any ``gsettings`` write fails.
     """
     for value in (start_hour, end_hour):
         if value < 0 or value > 24:
@@ -171,8 +271,13 @@ def set_night_light_schedule(start_hour: float, end_hour: float) -> str:
 
 
 def get_system_details() -> SystemDetails:
-    """
-    Collect basic system information (kernel, OS, uptime, memory, storage).
+    """Collect basic system information.
+
+    Returns:
+        Kernel, OS, uptime, memory, and storage snapshot.
+
+    References:
+        - ``lsblk`` usage: https://man7.org/linux/man-pages/man8/lsblk.8.html
     """
     os_info: dict[str, str] = _read_os_release()
     return SystemDetails(
@@ -186,8 +291,13 @@ def get_system_details() -> SystemDetails:
 
 
 def list_applications(limit: int = 50) -> list[ApplicationInfo]:
-    """
-    Discover installed applications from desktop entry locations.
+    """Discover installed applications from desktop entry locations.
+
+    Args:
+        limit: Maximum number of entries to return; ``<=0`` returns all.
+
+    Returns:
+        Sorted list of application metadata.
     """
     applications: dict[str, ApplicationInfo] = {}
     for base in DESKTOP_PATHS:
@@ -210,8 +320,19 @@ def list_applications(limit: int = 50) -> list[ApplicationInfo]:
 
 
 def launch_application(desktop_id: str) -> str:
-    """
-    Launch an application using gtk-launch.
+    """Launch an application using ``gtk-launch``.
+
+    Args:
+        desktop_id: Desktop identifier with or without the ``.desktop`` suffix.
+
+    Returns:
+        Confirmation string after attempting launch.
+
+    Raises:
+        RuntimeError: If the application fails to start.
+
+    References:
+        - gtk-launch: https://developer.gnome.org/gtk3/stable/gtk-launch.html
     """
     normalized: str = _normalize_desktop_id(desktop_id)
     result: CommandResult = run_command(["gtk-launch", normalized])
@@ -223,8 +344,13 @@ def launch_application(desktop_id: str) -> str:
 
 
 def get_favorite_apps() -> list[str]:
-    """
-    Retrieve the current GNOME Shell favorites list.
+    """Retrieve the current GNOME Shell favorites list.
+
+    Returns:
+        Favorite desktop IDs as stored by GNOME Shell.
+
+    Raises:
+        RuntimeError: If favorites cannot be parsed from ``gsettings`` output.
     """
     raw: str = _gsettings_get("org.gnome.shell", "favorite-apps")
     try:
@@ -235,8 +361,16 @@ def get_favorite_apps() -> list[str]:
 
 
 def set_favorite_apps(apps: Sequence[str]) -> str:
-    """
-    Overwrite the GNOME Shell favorites list.
+    """Overwrite the GNOME Shell favorites list.
+
+    Args:
+        apps: Sequence of desktop IDs; duplicates are removed.
+
+    Returns:
+        Confirmation including the final favorite count.
+
+    Raises:
+        RuntimeError: If the ``gsettings`` write fails.
     """
     normalized: list[str] = _deduplicate([_normalize_desktop_id(app) for app in apps])
     payload: str = _format_gsettings_list(normalized)
@@ -245,8 +379,13 @@ def set_favorite_apps(apps: Sequence[str]) -> str:
 
 
 def add_favorite_app(desktop_id: str) -> list[str]:
-    """
-    Append a desktop id to favorites if not already present.
+    """Append a desktop ID to favorites if not already present.
+
+    Args:
+        desktop_id: Identifier of the launcher to add.
+
+    Returns:
+        Updated favorites list after mutation.
     """
     favorites: list[str] = get_favorite_apps()
     normalized: str = _normalize_desktop_id(desktop_id)
@@ -257,8 +396,13 @@ def add_favorite_app(desktop_id: str) -> list[str]:
 
 
 def shutdown_system() -> str:
-    """
-    Request a system shutdown without prompting.
+    """Request a system shutdown without prompting.
+
+    Returns:
+        Confirmation message on successful request submission.
+
+    Raises:
+        RuntimeError: If the session manager rejects the command.
     """
     result: CommandResult = run_command(
         ["gnome-session-quit", "--power-off", "--no-prompt"]
@@ -271,8 +415,13 @@ def shutdown_system() -> str:
 
 
 def reboot_system() -> str:
-    """
-    Request a system reboot without prompting.
+    """Request a system reboot without prompting.
+
+    Returns:
+        Confirmation message on successful request submission.
+
+    Raises:
+        RuntimeError: If the session manager rejects the command.
     """
     result: CommandResult = run_command(
         ["gnome-session-quit", "--reboot", "--no-prompt"]
@@ -285,8 +434,19 @@ def reboot_system() -> str:
 
 
 def set_wifi_enabled(enabled: bool) -> str:
-    """
-    Turn Wi-Fi on or off via nmcli radio.
+    """Turn Wi-Fi on or off via ``nmcli radio``.
+
+    Args:
+        enabled: ``True`` to enable, ``False`` to disable.
+
+    Returns:
+        Confirmation string describing the new Wi-Fi state.
+
+    Raises:
+        RuntimeError: If NetworkManager rejects the change.
+
+    References:
+        - nmcli radio: https://networkmanager.dev/docs/api/latest/nmcli.html#nmcli-radio
     """
     state = "on" if enabled else "off"
     result: CommandResult = run_command(["nmcli", "radio", "wifi", state])
@@ -298,8 +458,16 @@ def set_wifi_enabled(enabled: bool) -> str:
 
 
 def set_bluetooth_enabled(enabled: bool) -> str:
-    """
-    Turn Bluetooth on or off via bluetoothctl.
+    """Turn Bluetooth on or off via ``bluetoothctl``.
+
+    Args:
+        enabled: ``True`` to power on, ``False`` to power off.
+
+    Returns:
+        Confirmation string describing the new Bluetooth state.
+
+    Raises:
+        RuntimeError: If ``bluetoothctl`` returns an error.
     """
     state = "on" if enabled else "off"
     result: CommandResult = run_command(
@@ -313,8 +481,16 @@ def set_bluetooth_enabled(enabled: bool) -> str:
 
 
 def set_networking_enabled(enabled: bool) -> str:
-    """
-    Enable or disable all networking (affects wired and Wi-Fi) via nmcli.
+    """Enable or disable all networking via ``nmcli networking``.
+
+    Args:
+        enabled: ``True`` to turn networking on, ``False`` to turn it off.
+
+    Returns:
+        Confirmation string describing the new networking state.
+
+    Raises:
+        RuntimeError: If NetworkManager rejects the change.
     """
     state = "on" if enabled else "off"
     result: CommandResult = run_command(["nmcli", "networking", state])
@@ -326,8 +502,16 @@ def set_networking_enabled(enabled: bool) -> str:
 
 
 def set_airplane_mode(enabled: bool) -> str:
-    """
-    Toggle airplane mode (turns all radios off/on) via nmcli.
+    """Toggle airplane mode via ``nmcli radio all``.
+
+    Args:
+        enabled: ``True`` disables radios; ``False`` re-enables them.
+
+    Returns:
+        Confirmation string describing the radio state.
+
+    Raises:
+        RuntimeError: If NetworkManager rejects the change.
     """
     state = "off" if enabled else "on"
     result: CommandResult = run_command(["nmcli", "radio", "all", state])
@@ -339,8 +523,19 @@ def set_airplane_mode(enabled: bool) -> str:
 
 
 def set_power_profile(mode: Literal["power-saver", "balanced", "performance"]) -> str:
-    """
-    Switch power profile using powerprofilesctl (if available).
+    """Switch power profile using ``powerprofilesctl``.
+
+    Args:
+        mode: Target profile supported by the daemon (power-saver, balanced, performance).
+
+    Returns:
+        Confirmation string describing the active profile.
+
+    Raises:
+        RuntimeError: If ``powerprofilesctl`` returns an error.
+
+    References:
+        - Power Profiles daemon: https://gitlab.freedesktop.org/hadess/power-profiles-daemon
     """
     result: CommandResult = run_command(["powerprofilesctl", "set", mode])
     if not result.success:
@@ -351,8 +546,17 @@ def set_power_profile(mode: Literal["power-saver", "balanced", "performance"]) -
 
 
 def set_volume_percent(volume_percent: int) -> str:
-    """
-    Set system output volume via pactl.
+    """Set system output volume via ``pactl``.
+
+    Args:
+        volume_percent: Desired volume percent; values above 100 may clip audio.
+
+    Returns:
+        Confirmation string describing the new volume.
+
+    Raises:
+        ValueError: If ``volume_percent`` is outside 0-150.
+        RuntimeError: If ``pactl`` fails to update the sink.
     """
     if volume_percent < 0 or volume_percent > 150:
         raise ValueError("Volume percent must be between 0 and 150.")
@@ -366,8 +570,16 @@ def set_volume_percent(volume_percent: int) -> str:
 
 
 def set_mute_state(action: Literal["toggle", "mute", "unmute"]) -> str:
-    """
-    Toggle or set mute state on the default sink.
+    """Toggle or set mute state on the default sink.
+
+    Args:
+        action: Desired mute change (toggle, mute, unmute).
+
+    Returns:
+        Confirmation string describing the applied action.
+
+    Raises:
+        RuntimeError: If ``pactl`` fails to update the sink mute state.
     """
     value = {
         "toggle": "toggle",
@@ -385,8 +597,16 @@ def set_mute_state(action: Literal["toggle", "mute", "unmute"]) -> str:
 
 
 def media_control(action: Literal["play-pause", "next", "previous", "stop"]) -> str:
-    """
-    Control media playback via playerctl.
+    """Control media playback via ``playerctl``.
+
+    Args:
+        action: Media command to execute against the default player.
+
+    Returns:
+        Confirmation string describing the executed action.
+
+    Raises:
+        RuntimeError: If the player command fails.
     """
     result: CommandResult = run_command(["playerctl", action])
     if not result.success:
@@ -395,8 +615,13 @@ def media_control(action: Literal["play-pause", "next", "previous", "stop"]) -> 
 
 
 def lock_screen() -> str:
-    """
-    Lock the session screen.
+    """Lock the session screen via the GNOME ScreenSaver DBus API.
+
+    Returns:
+        Confirmation string once the DBus call succeeds.
+
+    Raises:
+        RuntimeError: If the DBus invocation fails.
     """
     result: CommandResult = run_command(
         [
@@ -413,8 +638,13 @@ def lock_screen() -> str:
 
 
 def logout_session() -> str:
-    """
-    Log out of the current GNOME session without prompting.
+    """Log out of the current GNOME session without prompting.
+
+    Returns:
+        Confirmation string once logout is requested.
+
+    Raises:
+        RuntimeError: If the session manager rejects the request.
     """
     result: CommandResult = run_command(["gnome-session-quit", "--no-prompt"])
     if not result.success:
@@ -423,8 +653,16 @@ def logout_session() -> str:
 
 
 def open_with_default(target: str) -> str:
-    """
-    Open a file path or URL with the default handler via gio.
+    """Open a file path or URL with the default handler via ``gio``.
+
+    Args:
+        target: Path or URL to open; filesystem paths are resolved.
+
+    Returns:
+        Confirmation string describing the opened target.
+
+    Raises:
+        RuntimeError: If ``gio`` fails to open the resource.
     """
     resolved: str = _resolve_target(target)
     result: CommandResult = run_command(["gio", "open", resolved])
@@ -436,24 +674,43 @@ def open_with_default(target: str) -> str:
 
 
 def brightness_step_up() -> str:
-    """
-    Increase screen brightness one step via the Settings Daemon.
+    """Increase screen brightness one step via the Settings Daemon.
+
+    Returns:
+        Confirmation string after the brightness adjustment.
+
+    Raises:
+        RuntimeError: If the DBus call fails.
     """
     _call_power_method("StepUp")
     return "Increased brightness by one step."
 
 
 def brightness_step_down() -> str:
-    """
-    Decrease screen brightness one step via the Settings Daemon.
+    """Decrease screen brightness one step via the Settings Daemon.
+
+    Returns:
+        Confirmation string after the brightness adjustment.
+
+    Raises:
+        RuntimeError: If the DBus call fails.
     """
     _call_power_method("StepDown")
     return "Decreased brightness by one step."
 
 
 def move_to_trash(path: str) -> str:
-    """
-    Move a file or directory to the Trash using gio.
+    """Move a file or directory to the Trash using ``gio``.
+
+    Args:
+        path: File or directory to trash; ``~`` is expanded.
+
+    Returns:
+        Confirmation string describing the trashed path.
+
+    Raises:
+        ValueError: If the path does not exist.
+        RuntimeError: If ``gio`` fails to move the item.
     """
     resolved: Path = Path(path).expanduser().resolve()
     if not resolved.exists():
@@ -468,8 +725,13 @@ def move_to_trash(path: str) -> str:
 
 
 def empty_trash() -> str:
-    """
-    Empty the Trash using gio.
+    """Empty the Trash using ``gio``.
+
+    Returns:
+        Confirmation string on success.
+
+    Raises:
+        RuntimeError: If ``gio`` fails to empty Trash.
     """
     result: CommandResult = run_command(["gio", "trash", "--empty"])
     if not result.success:
@@ -482,8 +744,21 @@ def send_notification(
     body: Optional[str] = None,
     urgency: Literal["low", "normal", "critical"] = "normal",
 ) -> str:
-    """
-    Display a desktop notification via notify-send.
+    """Display a desktop notification via ``notify-send``.
+
+    Args:
+        summary: Notification title.
+        body: Optional body text for the notification.
+        urgency: Notification urgency hint (low, normal, critical).
+
+    Returns:
+        Confirmation string after dispatching the notification.
+
+    Raises:
+        RuntimeError: If ``notify-send`` fails.
+
+    References:
+        - Desktop Notifications spec: https://specifications.freedesktop.org/notification-spec/latest/
     """
     command = ["notify-send"]
     if urgency != "normal":
@@ -501,8 +776,16 @@ def send_notification(
 
 
 def copy_to_clipboard(text: str) -> str:
-    """
-    Copy plain text to the clipboard using wl-copy.
+    """Copy plain text to the clipboard using ``wl-copy``.
+
+    Args:
+        text: Text to place on the Wayland clipboard.
+
+    Returns:
+        Confirmation string after the copy operation.
+
+    Raises:
+        RuntimeError: If ``wl-copy`` fails.
     """
     result: CommandResult = run_command(["wl-copy", text])
     if not result.success:
@@ -513,8 +796,13 @@ def copy_to_clipboard(text: str) -> str:
 
 
 def paste_from_clipboard() -> str:
-    """
-    Retrieve clipboard contents using wl-paste.
+    """Retrieve clipboard contents using ``wl-paste``.
+
+    Returns:
+        Clipboard contents as returned by ``wl-paste``.
+
+    Raises:
+        RuntimeError: If ``wl-paste`` fails.
     """
     result: CommandResult = run_command(["wl-paste"])
     if not result.success:
@@ -525,8 +813,16 @@ def paste_from_clipboard() -> str:
 
 
 def set_tap_to_click(enabled: bool) -> str:
-    """
-    Enable or disable touchpad tap-to-click.
+    """Enable or disable touchpad tap-to-click.
+
+    Args:
+        enabled: ``True`` turns tap-to-click on; ``False`` turns it off.
+
+    Returns:
+        Confirmation string describing the new state.
+
+    Raises:
+        RuntimeError: If the ``gsettings`` write fails.
     """
     _gsettings_set(
         "org.gnome.desktop.peripherals.touchpad", "tap-to-click", _bool_value(enabled)
@@ -535,8 +831,16 @@ def set_tap_to_click(enabled: bool) -> str:
 
 
 def set_natural_scroll(enabled: bool) -> str:
-    """
-    Enable or disable natural scrolling for the touchpad.
+    """Enable or disable natural scrolling for the touchpad.
+
+    Args:
+        enabled: ``True`` enables natural (inverted) scrolling.
+
+    Returns:
+        Confirmation string describing the new state.
+
+    Raises:
+        RuntimeError: If the ``gsettings`` write fails.
     """
     _gsettings_set(
         "org.gnome.desktop.peripherals.touchpad", "natural-scroll", _bool_value(enabled)
@@ -545,8 +849,17 @@ def set_natural_scroll(enabled: bool) -> str:
 
 
 def set_touchpad_speed(speed: float) -> str:
-    """
-    Set touchpad pointer speed (-1.0 to 1.0).
+    """Set touchpad pointer speed.
+
+    Args:
+        speed: Pointer speed between -1.0 (slow) and 1.0 (fast).
+
+    Returns:
+        Confirmation string describing the new speed.
+
+    Raises:
+        ValueError: If speed falls outside [-1.0, 1.0].
+        RuntimeError: If the ``gsettings`` write fails.
     """
     if speed < -1.0 or speed > 1.0:
         raise ValueError("Touchpad speed must be between -1.0 and 1.0.")
@@ -555,6 +868,14 @@ def set_touchpad_speed(speed: float) -> str:
 
 
 def _command_output(command: Sequence[str]) -> str:
+    """Execute a command and return stdout, falling back to stderr on failure.
+
+    Args:
+        command: Command to run with arguments.
+
+    Returns:
+        Process stdout on success or best-effort error text on failure.
+    """
     result: CommandResult = run_command(command)
     if result.success:
         return result.stdout
@@ -565,6 +886,14 @@ def _command_output(command: Sequence[str]) -> str:
 
 
 def _resolve_target(target: str) -> str:
+    """Resolve a filesystem path if it exists.
+
+    Args:
+        target: Raw path or URL provided by the caller.
+
+    Returns:
+        Absolute path when the target exists locally; otherwise the original input.
+    """
     path: Path = Path(target).expanduser()
     if path.exists():
         return str(path.resolve())
@@ -572,15 +901,48 @@ def _resolve_target(target: str) -> str:
 
 
 def _iter_desktop_files(base: Path) -> Iterable[Path]:
+    """Yield desktop files under the provided directory recursively.
+
+    Args:
+        base: Directory to search for ``.desktop`` files.
+
+    Returns:
+        Generator over matching paths.
+    """
     return base.rglob("*.desktop")
 
 
 class _CaseSensitiveConfigParser(configparser.ConfigParser):
+    """ConfigParser variant that preserves option casing.
+
+    GNOME desktop entries use mixed-case keys that should not be lowercased.
+    """
+
     def optionxform(self, optionstr: str) -> str:
+        """Return options unchanged to maintain case sensitivity.
+
+        Args:
+            optionstr: Option name from the config file.
+
+        Returns:
+            Unmodified option name.
+        """
         return optionstr
 
 
 def _parse_desktop_entry(path: Path, source: Path) -> Optional[ApplicationInfo]:
+    """Parse a ``.desktop`` entry into ``ApplicationInfo``.
+
+    Args:
+        path: Path to the desktop file.
+        source: Base directory where the file was discovered.
+
+    Returns:
+        Parsed application metadata or ``None`` when invalid.
+
+    References:
+        - Desktop Entry spec: https://specifications.freedesktop.org/desktop-entry-spec/latest/
+    """
     parser: configparser.ConfigParser = _CaseSensitiveConfigParser(interpolation=None)
     try:
         parser.read(path)
@@ -602,6 +964,14 @@ def _parse_desktop_entry(path: Path, source: Path) -> Optional[ApplicationInfo]:
 
 
 def _normalize_desktop_id(desktop_id: str) -> str:
+    """Ensure desktop IDs include the ``.desktop`` suffix.
+
+    Args:
+        desktop_id: Identifier provided by the caller.
+
+    Returns:
+        Normalized identifier ending with ``.desktop``.
+    """
     desktop_id = desktop_id.strip()
     if not desktop_id.endswith(".desktop"):
         return f"{desktop_id}.desktop"
@@ -609,10 +979,26 @@ def _normalize_desktop_id(desktop_id: str) -> str:
 
 
 def _format_gsettings_list(values: Sequence[str]) -> str:
+    """Format a Python sequence into the list syntax expected by gsettings.
+
+    Args:
+        values: Entries to serialize.
+
+    Returns:
+        gsettings-compatible list literal.
+    """
     return "[" + ", ".join(f"'{value}'" for value in values) + "]"
 
 
 def _deduplicate(items: Sequence[str]) -> list[str]:
+    """Preserve order while removing duplicate items.
+
+    Args:
+        items: Sequence that may contain duplicates.
+
+    Returns:
+        Ordered list containing each value once.
+    """
     seen: set[str] = set()
     result: list[str] = []
     for item in items:
@@ -623,6 +1009,16 @@ def _deduplicate(items: Sequence[str]) -> list[str]:
 
 
 def _gsettings_set(schema: str, key: str, value: str) -> None:
+    """Set a gsettings key and raise on failure.
+
+    Args:
+        schema: Schema path, e.g. ``org.gnome.desktop.interface``.
+        key: Key under the schema to update.
+        value: Literal value to set.
+
+    Raises:
+        RuntimeError: If the gsettings invocation fails.
+    """
     result = run_command(["gsettings", "set", schema, key, value])
     if not result.success:
         raise RuntimeError(
@@ -631,6 +1027,18 @@ def _gsettings_set(schema: str, key: str, value: str) -> None:
 
 
 def _gsettings_get(schema: str, key: str) -> str:
+    """Retrieve a gsettings value and raise on failure.
+
+    Args:
+        schema: Schema path, e.g. ``org.gnome.shell``.
+        key: Key under the schema to read.
+
+    Returns:
+        Raw value returned by gsettings.
+
+    Raises:
+        RuntimeError: If the gsettings invocation fails.
+    """
     result = run_command(["gsettings", "get", schema, key])
     if not result.success:
         raise RuntimeError(
@@ -640,6 +1048,11 @@ def _gsettings_get(schema: str, key: str) -> str:
 
 
 def _read_os_release() -> dict[str, str]:
+    """Read ``/etc/os-release`` into a mapping of key/value pairs.
+
+    Returns:
+        Parsed OS metadata keys and values.
+    """
     path = Path("/etc/os-release")
     if not path.exists():
         return {}
@@ -654,6 +1067,14 @@ def _read_os_release() -> dict[str, str]:
 
 
 def _call_power_method(method: str) -> None:
+    """Invoke a GNOME Settings Daemon power DBus method by name.
+
+    Args:
+        method: Power screen method name such as ``StepUp`` or ``StepDown``.
+
+    Raises:
+        RuntimeError: If the DBus call fails.
+    """
     result: CommandResult = run_command(
         [
             "gdbus",
@@ -674,4 +1095,12 @@ def _call_power_method(method: str) -> None:
 
 
 def _bool_value(value: bool) -> str:
+    """Return ``"true"`` or ``"false"`` for gsettings-compatible booleans.
+
+    Args:
+        value: Boolean value to convert.
+
+    Returns:
+        gsettings-compatible boolean string.
+    """
     return "true" if value else "false"

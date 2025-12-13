@@ -3,8 +3,16 @@ import sys
 
 
 def configure_logging(name: str = "mcp_server") -> logging.Logger:
-    """
-    Configure a logger that writes to stderr to avoid polluting stdout-based MCP IO.
+    """Create a stderr-only logger suitable for stdio MCP servers.
+
+    Args:
+        name: Logger namespace used for filtering and formatting.
+
+    Returns:
+        Configured logger with a single stream handler.
+
+    References:
+        - Python logging guide: https://docs.python.org/3/library/logging.html
     """
     logger: logging.Logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
