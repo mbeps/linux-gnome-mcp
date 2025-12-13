@@ -47,3 +47,16 @@ class ApplicationInfo(BaseModel):
     name: Optional[str] = Field(None, description="Human-readable application name from the desktop file.")
     exec_cmd: Optional[str] = Field(None, description="Exec command from the desktop file, if present.")
     source: str = Field(..., description="Directory where the desktop file was found.")
+
+
+class SystemDetails(BaseModel):
+    """
+    High-level system information snapshot.
+    """
+
+    kernel_version: str = Field(..., description="Running kernel version.")
+    os_name: str = Field(..., description="Operating system name.")
+    os_version: str = Field(..., description="Operating system version or codename.")
+    uptime: str = Field(..., description="Human-readable uptime string.")
+    memory: str = Field(..., description="Memory usage summary (free -h).")
+    storage: str = Field(..., description="Block devices summary (lsblk).")

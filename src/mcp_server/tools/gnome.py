@@ -5,7 +5,7 @@ import configparser
 from pathlib import Path
 from typing import Iterable, Literal, Optional, Sequence
 
-from mcp_server.models import ApplicationInfo
+from mcp_server.models import ApplicationInfo, SystemDetails
 from mcp_server.utils.logger import configure_logging
 from mcp_server.utils.shell import run_command
 
@@ -159,6 +159,21 @@ def set_night_light_schedule(start_hour: float, end_hour: float) -> str:
     return f"Night Light schedule set from {start_hour} to {end_hour}."
 
 
+def get_system_details() -> SystemDetails:
+    """
+    Collect basic system information (kernel, OS, uptime, memory, storage).
+    """
+    os_info = _read_os_release()
+    return SystemDetails(
+        kernel_version=_command_output(["uname", "-r"]),
+        os_name=os_info.get("NAME", "Unknown"),
+        os_version=os_info.get("VERSION", os_info.get("VERSION_ID", "Unknown")),
+        uptime=_command_output(["uptime", "-p"]),
+        memory=_command_output(["free", "-h"]),
+        storage=_command_output(["lsblk", "-o", "NAME,SIZE,TYPE,MOUNTPOINT"]),
+    )
+
+
 def list_applications(limit: int = 50) -> list[ApplicationInfo]:
     """
     Discover installed applications from desktop entry locations.
@@ -228,6 +243,80 @@ def add_favorite_app(desktop_id: str) -> list[str]:
         favorites.append(normalized)
         set_favorite_apps(favorites)
     return favorites
+
+
+def shutdown_system() -> str:
+    """
+    Request a system shutdown without prompting.
+    """
+    result = run_command(["gnome-session-quit", "--power-off", "--no-prompt"])
+    if not result.success:
+        raise RuntimeError(f"Failed to initiate shutdown: {result.stderr or result.stdout}")
+    return "Shutdown initiated."
+
+
+def reboot_system() -> str:
+    """
+    Request a system reboot without prompting.
+    """
+    result = run_command(["gnome-session-quit", "--reboot", "--no-prompt"])
+    if not result.success:
+        raise RuntimeError(f"Failed to initiate reboot: {result.stderr or result.stdout}")
+    return "Reboot initiated."
+
+
+def set_wifi_enabled(enabled: bool) -> str:
+    """
+    Turn Wi-Fi on or off via nmcli radio.
+    """
+    state = "on" if enabled else "off"
+    result = run_command(["nmcli", "radio", "wifi", state])
+    if not result.success:
+        raise RuntimeError(f"Failed to set Wi-Fi {state}: {result.stderr or result.stdout}")
+    return f"Wi-Fi turned {state}."
+
+
+def set_bluetooth_enabled(enabled: bool) -> str:
+    """
+    Turn Bluetooth on or off via bluetoothctl.
+    """
+    state = "on" if enabled else "off"
+    result = run_command(["bluetoothctl", "--timeout", "5", "power", state])
+    if not result.success:
+        raise RuntimeError(f"Failed to set Bluetooth {state}: {result.stderr or result.stdout}")
+    return f"Bluetooth turned {state}."
+
+
+def set_networking_enabled(enabled: bool) -> str:
+    """
+    Enable or disable all networking (affects wired and Wi-Fi) via nmcli.
+    """
+    state = "on" if enabled else "off"
+    result = run_command(["nmcli", "networking", state])
+    if not result.success:
+        raise RuntimeError(f"Failed to set networking {state}: {result.stderr or result.stdout}")
+    return f"Networking turned {state}."
+
+
+def set_airplane_mode(enabled: bool) -> str:
+    """
+    Toggle airplane mode (turns all radios off/on) via nmcli.
+    """
+    state = "off" if enabled else "on"
+    result = run_command(["nmcli", "radio", "all", state])
+    if not result.success:
+        raise RuntimeError(f"Failed to toggle airplane mode: {result.stderr or result.stdout}")
+    return "Airplane mode enabled." if enabled else "Airplane mode disabled."
+
+
+def set_power_profile(mode: Literal["power-saver", "balanced", "performance"]) -> str:
+    """
+    Switch power profile using powerprofilesctl (if available).
+    """
+    result = run_command(["powerprofilesctl", "set", mode])
+    if not result.success:
+        raise RuntimeError(f"Failed to set power profile: {result.stderr or result.stdout}")
+    return f"Power profile set to {mode}."
 
 
 def set_volume_percent(volume_percent: int) -> str:
@@ -418,6 +507,14 @@ def set_touchpad_speed(speed: float) -> str:
     return f"Touchpad speed set to {speed}."
 
 
+def _command_output(command: Sequence[str]) -> str:
+    result = run_command(command)
+    if result.success:
+        return result.stdout
+    logger.warning("Command failed", extra={"cmd": result.command, "stderr": result.stderr})
+    return result.stderr or result.stdout or "Unavailable"
+
+
 def _resolve_target(target: str) -> str:
     path = Path(target).expanduser()
     if path.exists():
@@ -487,6 +584,20 @@ def _gsettings_get(schema: str, key: str) -> str:
             f"gsettings get failed ({schema} {key}): {result.stderr or result.stdout}"
         )
     return result.stdout
+
+
+def _read_os_release() -> dict[str, str]:
+    path = Path("/etc/os-release")
+    if not path.exists():
+        return {}
+
+    data: dict[str, str] = {}
+    for line in path.read_text().splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        data[key.strip()] = value.strip().strip('"')
+    return data
 
 
 def _call_power_method(method: str) -> None:

@@ -2,7 +2,7 @@ from typing import Literal, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from mcp_server.models import AnalysisResult, ApplicationInfo, SystemMetrics
+from mcp_server.models import AnalysisResult, ApplicationInfo, SystemDetails, SystemMetrics
 from mcp_server.tools import gnome
 from mcp_server.tools.system import calculate_health
 from mcp_server.utils.logger import configure_logging
@@ -163,6 +163,70 @@ def add_favorite_app(desktop_id: str) -> list[str]:
     Add a desktop id to the GNOME favorites list if not already present.
     """
     return gnome.add_favorite_app(desktop_id)
+
+
+@mcp.tool()
+def shutdown_system() -> str:
+    """
+    Initiate a system shutdown without prompting.
+    """
+    return gnome.shutdown_system()
+
+
+@mcp.tool()
+def reboot_system() -> str:
+    """
+    Initiate a system reboot without prompting.
+    """
+    return gnome.reboot_system()
+
+
+@mcp.tool()
+def get_system_details() -> SystemDetails:
+    """
+    Return basic system information (kernel, OS, uptime, memory, storage).
+    """
+    return gnome.get_system_details()
+
+
+@mcp.tool()
+def set_wifi_enabled(enabled: bool) -> str:
+    """
+    Turn Wi-Fi on or off via nmcli.
+    """
+    return gnome.set_wifi_enabled(enabled)
+
+
+@mcp.tool()
+def set_bluetooth_enabled(enabled: bool) -> str:
+    """
+    Turn Bluetooth on or off via bluetoothctl.
+    """
+    return gnome.set_bluetooth_enabled(enabled)
+
+
+@mcp.tool()
+def set_networking_enabled(enabled: bool) -> str:
+    """
+    Enable or disable all networking (wired and Wi-Fi) via nmcli.
+    """
+    return gnome.set_networking_enabled(enabled)
+
+
+@mcp.tool()
+def set_airplane_mode(enabled: bool) -> str:
+    """
+    Toggle airplane mode (all radios off/on) via nmcli.
+    """
+    return gnome.set_airplane_mode(enabled)
+
+
+@mcp.tool()
+def set_power_profile(mode: Literal["power-saver", "balanced", "performance"]) -> str:
+    """
+    Switch between power profiles (power-saver, balanced, performance).
+    """
+    return gnome.set_power_profile(mode)
 
 
 @mcp.tool()
