@@ -1,6 +1,9 @@
+from typing import Literal
+
 from mcp.server.fastmcp import FastMCP
 
-from mcp_server.models import AnalysisResult, SystemMetrics
+from mcp_server.models import AnalysisResult, ApplicationInfo, SystemMetrics
+from mcp_server.tools import gnome
 from mcp_server.tools.system import calculate_health
 from mcp_server.utils.logger import configure_logging
 
@@ -30,6 +33,86 @@ def get_default_config() -> str:
         "cpu_threshold_critical": 90.0
     }
     """
+
+
+@mcp.tool()
+def set_color_scheme(preference: Literal["default", "prefer-dark"]) -> str:
+    """
+    Switch between GNOME light and dark color schemes using gsettings.
+    """
+    return gnome.set_color_scheme(preference)
+
+
+@mcp.tool()
+def set_wallpaper(image_path: str) -> str:
+    """
+    Set the desktop wallpaper for both light and dark modes.
+    """
+    return gnome.set_wallpaper(image_path)
+
+
+@mcp.tool()
+def set_night_light(enabled: bool) -> str:
+    """
+    Enable or disable Night Light to adjust display color temperature.
+    """
+    return gnome.set_night_light(enabled)
+
+
+@mcp.tool()
+def list_applications(limit: int = 50) -> list[ApplicationInfo]:
+    """
+    List installed applications discovered from .desktop files.
+    """
+    return gnome.list_applications(limit=limit)
+
+
+@mcp.tool()
+def launch_application(desktop_id: str) -> str:
+    """
+    Launch an application by its desktop identifier using gtk-launch.
+    """
+    return gnome.launch_application(desktop_id)
+
+
+@mcp.tool()
+def set_volume(volume_percent: int) -> str:
+    """
+    Set system output volume percentage (0-150).
+    """
+    return gnome.set_volume_percent(volume_percent)
+
+
+@mcp.tool()
+def update_mute(action: Literal["toggle", "mute", "unmute"]) -> str:
+    """
+    Toggle or force mute state on the default output sink.
+    """
+    return gnome.set_mute_state(action)
+
+
+@mcp.tool()
+def control_media(action: Literal["play-pause", "next", "previous", "stop"]) -> str:
+    """
+    Control media playback through playerctl.
+    """
+    return gnome.media_control(action)
+
+
+@mcp.tool()
+def lock_screen() -> str:
+    """
+    Lock the current GNOME session screen.
+    """
+    return gnome.lock_screen()
+
+
+@mcp.tool()
+def open_with_default(target: str) -> str:
+    """
+    Open a file path or URL with the default GNOME handler via gio.
+    """
+    return gnome.open_with_default(target)
 
 
 def run() -> None:
