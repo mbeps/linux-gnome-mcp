@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import ast
 import configparser
+from logging import Logger
 from pathlib import Path
 from typing import Iterable, Literal, Optional, Sequence
 
-from mcp_server.models import ApplicationInfo, SystemDetails
+from mcp_server.models import ApplicationInfo, CommandResult, SystemDetails
 from mcp_server.utils.logger import configure_logging
 from mcp_server.utils.shell import run_command
 
-logger = configure_logging(__name__)
+logger: Logger = configure_logging(__name__)
 
 # Common search locations for .desktop entries
-DESKTOP_PATHS = [
+DESKTOP_PATHS: list[Path] = [
     Path("/usr/share/applications"),
     Path.home() / ".local/share/applications",
     Path("/var/lib/snapd/desktop/applications"),
@@ -23,16 +24,20 @@ def set_color_scheme(preference: Literal["default", "prefer-dark"]) -> str:
     """
     Toggle GNOME's color scheme using gsettings.
     """
-    result = run_command(
+    result: CommandResult = run_command(
         ["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", preference]
     )
     if not result.success:
-        raise RuntimeError(f"Failed to set color scheme: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to set color scheme: {result.stderr or result.stdout}"
+        )
     return f"Color scheme set to {preference}."
 
 
 def set_wallpaper_mode(
-    option: Literal["none", "wallpaper", "centered", "scaled", "stretched", "zoom", "spanned"]
+    option: Literal[
+        "none", "wallpaper", "centered", "scaled", "stretched", "zoom", "spanned"
+    ],
 ) -> str:
     """
     Update how the wallpaper is rendered (zoom, centered, spanned, etc.).
@@ -45,14 +50,14 @@ def set_wallpaper(image_path: str) -> str:
     """
     Update wallpaper for both light and dark keys to keep them in sync.
     """
-    resolved = Path(image_path).expanduser().resolve()
+    resolved: Path = Path(image_path).expanduser().resolve()
     if not resolved.is_file():
         raise ValueError(f"Image not found at {resolved}")
 
-    uri = resolved.as_uri()
-    schema = "org.gnome.desktop.background"
+    uri: str = resolved.as_uri()
+    schema: str = "org.gnome.desktop.background"
     for key in ("picture-uri", "picture-uri-dark"):
-        result = run_command(["gsettings", "set", schema, key, uri])
+        result: CommandResult = run_command(["gsettings", "set", schema, key, uri])
         if not result.success:
             raise RuntimeError(
                 f"Failed to set wallpaper ({key}): {result.stderr or result.stdout}"
@@ -106,7 +111,7 @@ def set_night_light(enabled: bool) -> str:
     Enable or disable Night Light.
     """
     value = "true" if enabled else "false"
-    result = run_command(
+    result: CommandResult = run_command(
         [
             "gsettings",
             "set",
@@ -127,8 +132,14 @@ def set_night_light_temperature(kelvin: int) -> str:
     Configure the Night Light temperature in Kelvin.
     """
     if kelvin < 1000 or kelvin > 10000:
-        raise ValueError("Night Light temperature should be between 1000 and 10000 Kelvin.")
-    _gsettings_set("org.gnome.settings-daemon.plugins.color", "night-light-temperature", str(kelvin))
+        raise ValueError(
+            "Night Light temperature should be between 1000 and 10000 Kelvin."
+        )
+    _gsettings_set(
+        "org.gnome.settings-daemon.plugins.color",
+        "night-light-temperature",
+        str(kelvin),
+    )
     return f"Night Light temperature set to {kelvin}K."
 
 
@@ -163,7 +174,7 @@ def get_system_details() -> SystemDetails:
     """
     Collect basic system information (kernel, OS, uptime, memory, storage).
     """
-    os_info = _read_os_release()
+    os_info: dict[str, str] = _read_os_release()
     return SystemDetails(
         kernel_version=_command_output(["uname", "-r"]),
         os_name=os_info.get("NAME", "Unknown"),
@@ -189,7 +200,7 @@ def list_applications(limit: int = 50) -> list[ApplicationInfo]:
             if info and info.desktop_id not in applications:
                 applications[info.desktop_id] = info
 
-    sorted_apps = sorted(
+    sorted_apps: list[ApplicationInfo] = sorted(
         applications.values(),
         key=lambda app: (app.name or app.desktop_id).lower(),
     )
@@ -202,8 +213,8 @@ def launch_application(desktop_id: str) -> str:
     """
     Launch an application using gtk-launch.
     """
-    normalized = _normalize_desktop_id(desktop_id)
-    result = run_command(["gtk-launch", normalized])
+    normalized: str = _normalize_desktop_id(desktop_id)
+    result: CommandResult = run_command(["gtk-launch", normalized])
     if not result.success:
         raise RuntimeError(
             f"Failed to launch {normalized}: {result.stderr or result.stdout}"
@@ -215,9 +226,9 @@ def get_favorite_apps() -> list[str]:
     """
     Retrieve the current GNOME Shell favorites list.
     """
-    raw = _gsettings_get("org.gnome.shell", "favorite-apps")
+    raw: str = _gsettings_get("org.gnome.shell", "favorite-apps")
     try:
-        parsed = ast.literal_eval(raw)
+        parsed: list[str] | tuple[str, ...] = ast.literal_eval(raw)
         return [str(item) for item in parsed if isinstance(item, str)]
     except (ValueError, SyntaxError):
         raise RuntimeError(f"Unable to parse favorite apps from: {raw}")
@@ -227,8 +238,8 @@ def set_favorite_apps(apps: Sequence[str]) -> str:
     """
     Overwrite the GNOME Shell favorites list.
     """
-    normalized = _deduplicate([_normalize_desktop_id(app) for app in apps])
-    payload = _format_gsettings_list(normalized)
+    normalized: list[str] = _deduplicate([_normalize_desktop_id(app) for app in apps])
+    payload: str = _format_gsettings_list(normalized)
     _gsettings_set("org.gnome.shell", "favorite-apps", payload)
     return f"Updated favorites with {len(normalized)} entries."
 
@@ -237,8 +248,8 @@ def add_favorite_app(desktop_id: str) -> list[str]:
     """
     Append a desktop id to favorites if not already present.
     """
-    favorites = get_favorite_apps()
-    normalized = _normalize_desktop_id(desktop_id)
+    favorites: list[str] = get_favorite_apps()
+    normalized: str = _normalize_desktop_id(desktop_id)
     if normalized not in favorites:
         favorites.append(normalized)
         set_favorite_apps(favorites)
@@ -249,9 +260,13 @@ def shutdown_system() -> str:
     """
     Request a system shutdown without prompting.
     """
-    result = run_command(["gnome-session-quit", "--power-off", "--no-prompt"])
+    result: CommandResult = run_command(
+        ["gnome-session-quit", "--power-off", "--no-prompt"]
+    )
     if not result.success:
-        raise RuntimeError(f"Failed to initiate shutdown: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to initiate shutdown: {result.stderr or result.stdout}"
+        )
     return "Shutdown initiated."
 
 
@@ -259,9 +274,13 @@ def reboot_system() -> str:
     """
     Request a system reboot without prompting.
     """
-    result = run_command(["gnome-session-quit", "--reboot", "--no-prompt"])
+    result: CommandResult = run_command(
+        ["gnome-session-quit", "--reboot", "--no-prompt"]
+    )
     if not result.success:
-        raise RuntimeError(f"Failed to initiate reboot: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to initiate reboot: {result.stderr or result.stdout}"
+        )
     return "Reboot initiated."
 
 
@@ -270,9 +289,11 @@ def set_wifi_enabled(enabled: bool) -> str:
     Turn Wi-Fi on or off via nmcli radio.
     """
     state = "on" if enabled else "off"
-    result = run_command(["nmcli", "radio", "wifi", state])
+    result: CommandResult = run_command(["nmcli", "radio", "wifi", state])
     if not result.success:
-        raise RuntimeError(f"Failed to set Wi-Fi {state}: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to set Wi-Fi {state}: {result.stderr or result.stdout}"
+        )
     return f"Wi-Fi turned {state}."
 
 
@@ -281,9 +302,13 @@ def set_bluetooth_enabled(enabled: bool) -> str:
     Turn Bluetooth on or off via bluetoothctl.
     """
     state = "on" if enabled else "off"
-    result = run_command(["bluetoothctl", "--timeout", "5", "power", state])
+    result: CommandResult = run_command(
+        ["bluetoothctl", "--timeout", "5", "power", state]
+    )
     if not result.success:
-        raise RuntimeError(f"Failed to set Bluetooth {state}: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to set Bluetooth {state}: {result.stderr or result.stdout}"
+        )
     return f"Bluetooth turned {state}."
 
 
@@ -292,9 +317,11 @@ def set_networking_enabled(enabled: bool) -> str:
     Enable or disable all networking (affects wired and Wi-Fi) via nmcli.
     """
     state = "on" if enabled else "off"
-    result = run_command(["nmcli", "networking", state])
+    result: CommandResult = run_command(["nmcli", "networking", state])
     if not result.success:
-        raise RuntimeError(f"Failed to set networking {state}: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to set networking {state}: {result.stderr or result.stdout}"
+        )
     return f"Networking turned {state}."
 
 
@@ -303,9 +330,11 @@ def set_airplane_mode(enabled: bool) -> str:
     Toggle airplane mode (turns all radios off/on) via nmcli.
     """
     state = "off" if enabled else "on"
-    result = run_command(["nmcli", "radio", "all", state])
+    result: CommandResult = run_command(["nmcli", "radio", "all", state])
     if not result.success:
-        raise RuntimeError(f"Failed to toggle airplane mode: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to toggle airplane mode: {result.stderr or result.stdout}"
+        )
     return "Airplane mode enabled." if enabled else "Airplane mode disabled."
 
 
@@ -313,9 +342,11 @@ def set_power_profile(mode: Literal["power-saver", "balanced", "performance"]) -
     """
     Switch power profile using powerprofilesctl (if available).
     """
-    result = run_command(["powerprofilesctl", "set", mode])
+    result: CommandResult = run_command(["powerprofilesctl", "set", mode])
     if not result.success:
-        raise RuntimeError(f"Failed to set power profile: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to set power profile: {result.stderr or result.stdout}"
+        )
     return f"Power profile set to {mode}."
 
 
@@ -326,13 +357,11 @@ def set_volume_percent(volume_percent: int) -> str:
     if volume_percent < 0 or volume_percent > 150:
         raise ValueError("Volume percent must be between 0 and 150.")
 
-    result = run_command(
+    result: CommandResult = run_command(
         ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{volume_percent}%"]
     )
     if not result.success:
-        raise RuntimeError(
-            f"Failed to set volume: {result.stderr or result.stdout}"
-        )
+        raise RuntimeError(f"Failed to set volume: {result.stderr or result.stdout}")
     return f"Volume set to {volume_percent}%."
 
 
@@ -345,9 +374,13 @@ def set_mute_state(action: Literal["toggle", "mute", "unmute"]) -> str:
         "mute": "1",
         "unmute": "0",
     }[action]
-    result = run_command(["pactl", "set-sink-mute", "@DEFAULT_SINK@", value])
+    result: CommandResult = run_command(
+        ["pactl", "set-sink-mute", "@DEFAULT_SINK@", value]
+    )
     if not result.success:
-        raise RuntimeError(f"Failed to update mute state: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to update mute state: {result.stderr or result.stdout}"
+        )
     return f"Mute state updated with action '{action}'."
 
 
@@ -355,11 +388,9 @@ def media_control(action: Literal["play-pause", "next", "previous", "stop"]) -> 
     """
     Control media playback via playerctl.
     """
-    result = run_command(["playerctl", action])
+    result: CommandResult = run_command(["playerctl", action])
     if not result.success:
-        raise RuntimeError(
-            f"Media command failed: {result.stderr or result.stdout}"
-        )
+        raise RuntimeError(f"Media command failed: {result.stderr or result.stdout}")
     return f"Executed media action '{action}'."
 
 
@@ -367,7 +398,7 @@ def lock_screen() -> str:
     """
     Lock the session screen.
     """
-    result = run_command(
+    result: CommandResult = run_command(
         [
             "dbus-send",
             "--type=method_call",
@@ -385,7 +416,7 @@ def logout_session() -> str:
     """
     Log out of the current GNOME session without prompting.
     """
-    result = run_command(["gnome-session-quit", "--no-prompt"])
+    result: CommandResult = run_command(["gnome-session-quit", "--no-prompt"])
     if not result.success:
         raise RuntimeError(f"Failed to log out: {result.stderr or result.stdout}")
     return "Logout initiated."
@@ -395,10 +426,12 @@ def open_with_default(target: str) -> str:
     """
     Open a file path or URL with the default handler via gio.
     """
-    resolved = _resolve_target(target)
-    result = run_command(["gio", "open", resolved])
+    resolved: str = _resolve_target(target)
+    result: CommandResult = run_command(["gio", "open", resolved])
     if not result.success:
-        raise RuntimeError(f"Failed to open {resolved}: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to open {resolved}: {result.stderr or result.stdout}"
+        )
     return f"Opened {resolved} with the default application."
 
 
@@ -422,13 +455,15 @@ def move_to_trash(path: str) -> str:
     """
     Move a file or directory to the Trash using gio.
     """
-    resolved = Path(path).expanduser().resolve()
+    resolved: Path = Path(path).expanduser().resolve()
     if not resolved.exists():
         raise ValueError(f"Path does not exist: {resolved}")
 
-    result = run_command(["gio", "trash", str(resolved)])
+    result: CommandResult = run_command(["gio", "trash", str(resolved)])
     if not result.success:
-        raise RuntimeError(f"Failed to trash {resolved}: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to trash {resolved}: {result.stderr or result.stdout}"
+        )
     return f"Moved {resolved} to Trash."
 
 
@@ -436,14 +471,16 @@ def empty_trash() -> str:
     """
     Empty the Trash using gio.
     """
-    result = run_command(["gio", "trash", "--empty"])
+    result: CommandResult = run_command(["gio", "trash", "--empty"])
     if not result.success:
         raise RuntimeError(f"Failed to empty Trash: {result.stderr or result.stdout}")
     return "Trash emptied."
 
 
 def send_notification(
-    summary: str, body: Optional[str] = None, urgency: Literal["low", "normal", "critical"] = "normal"
+    summary: str,
+    body: Optional[str] = None,
+    urgency: Literal["low", "normal", "critical"] = "normal",
 ) -> str:
     """
     Display a desktop notification via notify-send.
@@ -455,9 +492,11 @@ def send_notification(
     if body:
         command.append(body)
 
-    result = run_command(command)
+    result: CommandResult = run_command(command)
     if not result.success:
-        raise RuntimeError(f"Failed to send notification: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to send notification: {result.stderr or result.stdout}"
+        )
     return "Notification sent."
 
 
@@ -465,9 +504,11 @@ def copy_to_clipboard(text: str) -> str:
     """
     Copy plain text to the clipboard using wl-copy.
     """
-    result = run_command(["wl-copy", text])
+    result: CommandResult = run_command(["wl-copy", text])
     if not result.success:
-        raise RuntimeError(f"Failed to copy to clipboard: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to copy to clipboard: {result.stderr or result.stdout}"
+        )
     return "Copied text to clipboard."
 
 
@@ -475,9 +516,11 @@ def paste_from_clipboard() -> str:
     """
     Retrieve clipboard contents using wl-paste.
     """
-    result = run_command(["wl-paste"])
+    result: CommandResult = run_command(["wl-paste"])
     if not result.success:
-        raise RuntimeError(f"Failed to read clipboard: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Failed to read clipboard: {result.stderr or result.stdout}"
+        )
     return result.stdout
 
 
@@ -485,7 +528,9 @@ def set_tap_to_click(enabled: bool) -> str:
     """
     Enable or disable touchpad tap-to-click.
     """
-    _gsettings_set("org.gnome.desktop.peripherals.touchpad", "tap-to-click", _bool_value(enabled))
+    _gsettings_set(
+        "org.gnome.desktop.peripherals.touchpad", "tap-to-click", _bool_value(enabled)
+    )
     return f"Tap-to-click set to {enabled}."
 
 
@@ -493,7 +538,9 @@ def set_natural_scroll(enabled: bool) -> str:
     """
     Enable or disable natural scrolling for the touchpad.
     """
-    _gsettings_set("org.gnome.desktop.peripherals.touchpad", "natural-scroll", _bool_value(enabled))
+    _gsettings_set(
+        "org.gnome.desktop.peripherals.touchpad", "natural-scroll", _bool_value(enabled)
+    )
     return f"Natural scrolling set to {enabled}."
 
 
@@ -508,15 +555,17 @@ def set_touchpad_speed(speed: float) -> str:
 
 
 def _command_output(command: Sequence[str]) -> str:
-    result = run_command(command)
+    result: CommandResult = run_command(command)
     if result.success:
         return result.stdout
-    logger.warning("Command failed", extra={"cmd": result.command, "stderr": result.stderr})
+    logger.warning(
+        "Command failed", extra={"cmd": result.command, "stderr": result.stderr}
+    )
     return result.stderr or result.stdout or "Unavailable"
 
 
 def _resolve_target(target: str) -> str:
-    path = Path(target).expanduser()
+    path: Path = Path(target).expanduser()
     if path.exists():
         return str(path.resolve())
     return target
@@ -526,9 +575,13 @@ def _iter_desktop_files(base: Path) -> Iterable[Path]:
     return base.rglob("*.desktop")
 
 
+class _CaseSensitiveConfigParser(configparser.ConfigParser):
+    def optionxform(self, optionstr: str) -> str:
+        return optionstr
+
+
 def _parse_desktop_entry(path: Path, source: Path) -> Optional[ApplicationInfo]:
-    parser = configparser.ConfigParser(interpolation=None)
-    parser.optionxform = str  # preserve case
+    parser: configparser.ConfigParser = _CaseSensitiveConfigParser(interpolation=None)
     try:
         parser.read(path)
     except (configparser.Error, OSError):
@@ -539,9 +592,9 @@ def _parse_desktop_entry(path: Path, source: Path) -> Optional[ApplicationInfo]:
         return None
 
     entry = parser["Desktop Entry"]
-    name = entry.get("Name")
-    exec_cmd = entry.get("Exec")
-    desktop_id = path.name
+    name: Optional[str] = entry.get("Name")
+    exec_cmd: Optional[str] = entry.get("Exec")
+    desktop_id: str = path.name
 
     return ApplicationInfo(
         desktop_id=desktop_id, name=name, exec_cmd=exec_cmd, source=str(source)
@@ -601,7 +654,7 @@ def _read_os_release() -> dict[str, str]:
 
 
 def _call_power_method(method: str) -> None:
-    result = run_command(
+    result: CommandResult = run_command(
         [
             "gdbus",
             "call",
@@ -615,7 +668,9 @@ def _call_power_method(method: str) -> None:
         ]
     )
     if not result.success:
-        raise RuntimeError(f"Brightness adjustment failed: {result.stderr or result.stdout}")
+        raise RuntimeError(
+            f"Brightness adjustment failed: {result.stderr or result.stdout}"
+        )
 
 
 def _bool_value(value: bool) -> str:

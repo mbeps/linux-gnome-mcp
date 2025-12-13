@@ -1,3 +1,4 @@
+from logging import Logger
 from typing import Literal, Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -7,8 +8,8 @@ from mcp_server.tools import gnome
 from mcp_server.tools.system import calculate_health
 from mcp_server.utils.logger import configure_logging
 
-mcp = FastMCP("Linux-GNOME-Automations", dependencies=["pydantic"])
-logger = configure_logging("mcp_server.main")
+mcp: FastMCP = FastMCP("Linux-GNOME-Automations", dependencies=["pydantic"])
+logger: Logger = configure_logging("mcp_server.main")
 
 
 @mcp.tool()
