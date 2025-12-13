@@ -1,5 +1,7 @@
 # **GNOME & Fedora MCP Server**
 
+FastMCP MCP server for GNOME and Fedora that lets AI clients automate desktop tasks. It handles appearance tweaks, app launch, power, network, audio, notifications, clipboard, and file actions. 
+
 # Tools
 - Health: `analyze_metrics(metrics: SystemMetrics)`.
 - Appearance: `set_color_scheme`, `set_wallpaper`, `set_wallpaper_mode`, `set_gtk_theme`, `set_icon_theme`, `set_font`, `set_text_scaling`, `set_night_light`, `set_night_light_temperature`, `set_night_light_schedule_automatic`, `set_night_light_schedule`.
