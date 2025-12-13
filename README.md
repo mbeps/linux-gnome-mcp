@@ -1,17 +1,13 @@
 # **GNOME & Fedora MCP Server**
 
-# Tools 
-- `analyze_metrics(metrics: SystemMetrics)`: returns health status/recommendation based on CPU/memory/process counts.
-- `set_color_scheme(preference: "default"|"prefer-dark")`: switch GNOME light/dark color scheme.
-- `set_wallpaper(image_path: str)`: set wallpaper URI for both light and dark keys.
-- `set_night_light(enabled: bool)`: toggle Night Light on/off.
-- `list_applications(limit: int = 50)`: list installed applications from .desktop files.
-- `launch_application(desktop_id: str)`: launch app via gtk-launch by desktop id.
-- `set_volume(volume_percent: int)`: set output volume 0–150% using pactl.
-- `update_mute(action: "toggle"|"mute"|"unmute")`: change mute state on default sink.
-- `control_media(action: "play-pause"|"next"|"previous"|"stop")`: send playerctl media command.
-- `lock_screen()`: lock current GNOME session.
-- `open_with_default(target: str)`: open file path or URL with GNOME default handler.
+# Tools
+- Health: `analyze_metrics(metrics: SystemMetrics)`.
+- Appearance: `set_color_scheme`, `set_wallpaper`, `set_wallpaper_mode`, `set_gtk_theme`, `set_icon_theme`, `set_font`, `set_text_scaling`, `set_night_light`, `set_night_light_temperature`, `set_night_light_schedule_automatic`, `set_night_light_schedule`.
+- Apps & favorites: `list_applications`, `launch_application`, `get_favorite_apps`, `set_favorite_apps`, `add_favorite_app`.
+- System controls: `shutdown_system`, `reboot_system`, `get_system_details`, `set_wifi_enabled`, `set_bluetooth_enabled`, `set_networking_enabled`, `set_airplane_mode`, `set_power_profile`, `set_volume`, `update_mute`, `control_media`, `brightness_step_up`, `brightness_step_down`, `lock_screen`, `logout_session`.
+- Files & shell: `open_with_default`, `move_to_trash`, `empty_trash`.
+- Notifications & clipboard: `send_notification`, `copy_to_clipboard`, `paste_from_clipboard`.
+- Touchpad: `set_tap_to_click`, `set_natural_scroll`, `set_touchpad_speed`.
 
 # Requirements
 These are the requirements for running this project:

@@ -1,12 +1,19 @@
+from logging import Logger
+
 from mcp_server.models import AnalysisResult, SystemMetrics
 from mcp_server.utils.logger import configure_logging
 
-logger = configure_logging(__name__)
+logger: Logger = configure_logging(__name__)
 
 
 def calculate_health(metrics: SystemMetrics) -> AnalysisResult:
-    """
-    Pure logic function to determine system health based on provided metrics.
+    """Determine system health based on CPU and memory load.
+
+    Args:
+        metrics: Snapshot of resource usage for the host under evaluation.
+
+    Returns:
+        Health classification with optional remediation guidance.
     """
     logger.info(
         "Analyzing system metrics", extra={"cpu_percent": metrics.cpu_percent}
