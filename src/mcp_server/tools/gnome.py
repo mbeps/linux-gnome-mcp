@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import ast
 import configparser
 from pathlib import Path
-from typing import Iterable, Literal, Optional
+from typing import Iterable, Literal, Optional, Sequence
 
 from mcp_server.models import ApplicationInfo
 from mcp_server.utils.logger import configure_logging
@@ -30,6 +31,16 @@ def set_color_scheme(preference: Literal["default", "prefer-dark"]) -> str:
     return f"Color scheme set to {preference}."
 
 
+def set_wallpaper_mode(
+    option: Literal["none", "wallpaper", "centered", "scaled", "stretched", "zoom", "spanned"]
+) -> str:
+    """
+    Update how the wallpaper is rendered (zoom, centered, spanned, etc.).
+    """
+    _gsettings_set("org.gnome.desktop.background", "picture-options", option)
+    return f"Wallpaper rendering set to {option}."
+
+
 def set_wallpaper(image_path: str) -> str:
     """
     Update wallpaper for both light and dark keys to keep them in sync.
@@ -47,6 +58,47 @@ def set_wallpaper(image_path: str) -> str:
                 f"Failed to set wallpaper ({key}): {result.stderr or result.stdout}"
             )
     return f"Wallpaper set to {uri} for light and dark modes."
+
+
+def set_gtk_theme(theme: str) -> str:
+    """
+    Set the GTK theme for legacy/non-libadwaita applications.
+    """
+    _gsettings_set("org.gnome.desktop.interface", "gtk-theme", theme)
+    return f"GTK theme set to {theme}."
+
+
+def set_icon_theme(icon_theme: str) -> str:
+    """
+    Set the icon theme.
+    """
+    _gsettings_set("org.gnome.desktop.interface", "icon-theme", icon_theme)
+    return f"Icon theme set to {icon_theme}."
+
+
+def set_font(
+    font_type: Literal["interface", "monospace", "document"], font_value: str
+) -> str:
+    """
+    Update GNOME font preferences (interface, monospace, or document).
+    """
+    key = {
+        "interface": "font-name",
+        "monospace": "monospace-font-name",
+        "document": "document-font-name",
+    }[font_type]
+    _gsettings_set("org.gnome.desktop.interface", key, font_value)
+    return f"Set {font_type} font to {font_value}."
+
+
+def set_text_scaling(factor: float) -> str:
+    """
+    Adjust the global text scaling factor (commonly for HiDPI displays).
+    """
+    if factor <= 0:
+        raise ValueError("Scaling factor must be greater than zero.")
+    _gsettings_set("org.gnome.desktop.interface", "text-scaling-factor", str(factor))
+    return f"Text scaling factor set to {factor}."
 
 
 def set_night_light(enabled: bool) -> str:
@@ -68,6 +120,43 @@ def set_night_light(enabled: bool) -> str:
             f"Failed to update Night Light: {result.stderr or result.stdout}"
         )
     return f"Night Light set to {enabled}."
+
+
+def set_night_light_temperature(kelvin: int) -> str:
+    """
+    Configure the Night Light temperature in Kelvin.
+    """
+    if kelvin < 1000 or kelvin > 10000:
+        raise ValueError("Night Light temperature should be between 1000 and 10000 Kelvin.")
+    _gsettings_set("org.gnome.settings-daemon.plugins.color", "night-light-temperature", str(kelvin))
+    return f"Night Light temperature set to {kelvin}K."
+
+
+def set_night_light_schedule_automatic(enabled: bool) -> str:
+    """
+    Toggle automatic Night Light scheduling.
+    """
+    _gsettings_set(
+        "org.gnome.settings-daemon.plugins.color",
+        "night-light-schedule-automatic",
+        _bool_value(enabled),
+    )
+    return f"Night Light automatic scheduling set to {enabled}."
+
+
+def set_night_light_schedule(start_hour: float, end_hour: float) -> str:
+    """
+    Set a manual Night Light schedule in 24-hour time.
+    """
+    for value in (start_hour, end_hour):
+        if value < 0 or value > 24:
+            raise ValueError("Night Light schedule hours must be between 0 and 24.")
+
+    schema = "org.gnome.settings-daemon.plugins.color"
+    _gsettings_set(schema, "night-light-schedule-automatic", "false")
+    _gsettings_set(schema, "night-light-schedule-from", str(start_hour))
+    _gsettings_set(schema, "night-light-schedule-to", str(end_hour))
+    return f"Night Light schedule set from {start_hour} to {end_hour}."
 
 
 def list_applications(limit: int = 50) -> list[ApplicationInfo]:
@@ -105,6 +194,40 @@ def launch_application(desktop_id: str) -> str:
             f"Failed to launch {normalized}: {result.stderr or result.stdout}"
         )
     return f"Launched {normalized}."
+
+
+def get_favorite_apps() -> list[str]:
+    """
+    Retrieve the current GNOME Shell favorites list.
+    """
+    raw = _gsettings_get("org.gnome.shell", "favorite-apps")
+    try:
+        parsed = ast.literal_eval(raw)
+        return [str(item) for item in parsed if isinstance(item, str)]
+    except (ValueError, SyntaxError):
+        raise RuntimeError(f"Unable to parse favorite apps from: {raw}")
+
+
+def set_favorite_apps(apps: Sequence[str]) -> str:
+    """
+    Overwrite the GNOME Shell favorites list.
+    """
+    normalized = _deduplicate([_normalize_desktop_id(app) for app in apps])
+    payload = _format_gsettings_list(normalized)
+    _gsettings_set("org.gnome.shell", "favorite-apps", payload)
+    return f"Updated favorites with {len(normalized)} entries."
+
+
+def add_favorite_app(desktop_id: str) -> list[str]:
+    """
+    Append a desktop id to favorites if not already present.
+    """
+    favorites = get_favorite_apps()
+    normalized = _normalize_desktop_id(desktop_id)
+    if normalized not in favorites:
+        favorites.append(normalized)
+        set_favorite_apps(favorites)
+    return favorites
 
 
 def set_volume_percent(volume_percent: int) -> str:
@@ -169,6 +292,16 @@ def lock_screen() -> str:
     return "Screen locked."
 
 
+def logout_session() -> str:
+    """
+    Log out of the current GNOME session without prompting.
+    """
+    result = run_command(["gnome-session-quit", "--no-prompt"])
+    if not result.success:
+        raise RuntimeError(f"Failed to log out: {result.stderr or result.stdout}")
+    return "Logout initiated."
+
+
 def open_with_default(target: str) -> str:
     """
     Open a file path or URL with the default handler via gio.
@@ -178,6 +311,111 @@ def open_with_default(target: str) -> str:
     if not result.success:
         raise RuntimeError(f"Failed to open {resolved}: {result.stderr or result.stdout}")
     return f"Opened {resolved} with the default application."
+
+
+def brightness_step_up() -> str:
+    """
+    Increase screen brightness one step via the Settings Daemon.
+    """
+    _call_power_method("StepUp")
+    return "Increased brightness by one step."
+
+
+def brightness_step_down() -> str:
+    """
+    Decrease screen brightness one step via the Settings Daemon.
+    """
+    _call_power_method("StepDown")
+    return "Decreased brightness by one step."
+
+
+def move_to_trash(path: str) -> str:
+    """
+    Move a file or directory to the Trash using gio.
+    """
+    resolved = Path(path).expanduser().resolve()
+    if not resolved.exists():
+        raise ValueError(f"Path does not exist: {resolved}")
+
+    result = run_command(["gio", "trash", str(resolved)])
+    if not result.success:
+        raise RuntimeError(f"Failed to trash {resolved}: {result.stderr or result.stdout}")
+    return f"Moved {resolved} to Trash."
+
+
+def empty_trash() -> str:
+    """
+    Empty the Trash using gio.
+    """
+    result = run_command(["gio", "trash", "--empty"])
+    if not result.success:
+        raise RuntimeError(f"Failed to empty Trash: {result.stderr or result.stdout}")
+    return "Trash emptied."
+
+
+def send_notification(
+    summary: str, body: Optional[str] = None, urgency: Literal["low", "normal", "critical"] = "normal"
+) -> str:
+    """
+    Display a desktop notification via notify-send.
+    """
+    command = ["notify-send"]
+    if urgency != "normal":
+        command.extend(["-u", urgency])
+    command.append(summary)
+    if body:
+        command.append(body)
+
+    result = run_command(command)
+    if not result.success:
+        raise RuntimeError(f"Failed to send notification: {result.stderr or result.stdout}")
+    return "Notification sent."
+
+
+def copy_to_clipboard(text: str) -> str:
+    """
+    Copy plain text to the clipboard using wl-copy.
+    """
+    result = run_command(["wl-copy", text])
+    if not result.success:
+        raise RuntimeError(f"Failed to copy to clipboard: {result.stderr or result.stdout}")
+    return "Copied text to clipboard."
+
+
+def paste_from_clipboard() -> str:
+    """
+    Retrieve clipboard contents using wl-paste.
+    """
+    result = run_command(["wl-paste"])
+    if not result.success:
+        raise RuntimeError(f"Failed to read clipboard: {result.stderr or result.stdout}")
+    return result.stdout
+
+
+def set_tap_to_click(enabled: bool) -> str:
+    """
+    Enable or disable touchpad tap-to-click.
+    """
+    _gsettings_set("org.gnome.desktop.peripherals.touchpad", "tap-to-click", _bool_value(enabled))
+    return f"Tap-to-click set to {enabled}."
+
+
+def set_natural_scroll(enabled: bool) -> str:
+    """
+    Enable or disable natural scrolling for the touchpad.
+    """
+    _gsettings_set("org.gnome.desktop.peripherals.touchpad", "natural-scroll", _bool_value(enabled))
+    return f"Natural scrolling set to {enabled}."
+
+
+def set_touchpad_speed(speed: float) -> str:
+    """
+    Set touchpad pointer speed (-1.0 to 1.0).
+    """
+    if speed < -1.0 or speed > 1.0:
+        raise ValueError("Touchpad speed must be between -1.0 and 1.0.")
+    _gsettings_set("org.gnome.desktop.peripherals.touchpad", "speed", str(speed))
+    return f"Touchpad speed set to {speed}."
 
 
 def _resolve_target(target: str) -> str:
@@ -218,3 +456,56 @@ def _normalize_desktop_id(desktop_id: str) -> str:
     if not desktop_id.endswith(".desktop"):
         return f"{desktop_id}.desktop"
     return desktop_id
+
+
+def _format_gsettings_list(values: Sequence[str]) -> str:
+    return "[" + ", ".join(f"'{value}'" for value in values) + "]"
+
+
+def _deduplicate(items: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+
+def _gsettings_set(schema: str, key: str, value: str) -> None:
+    result = run_command(["gsettings", "set", schema, key, value])
+    if not result.success:
+        raise RuntimeError(
+            f"gsettings set failed ({schema} {key}): {result.stderr or result.stdout}"
+        )
+
+
+def _gsettings_get(schema: str, key: str) -> str:
+    result = run_command(["gsettings", "get", schema, key])
+    if not result.success:
+        raise RuntimeError(
+            f"gsettings get failed ({schema} {key}): {result.stderr or result.stdout}"
+        )
+    return result.stdout
+
+
+def _call_power_method(method: str) -> None:
+    result = run_command(
+        [
+            "gdbus",
+            "call",
+            "--session",
+            "--dest",
+            "org.gnome.SettingsDaemon.Power",
+            "--object-path",
+            "/org/gnome/SettingsDaemon/Power",
+            "--method",
+            f"org.gnome.SettingsDaemon.Power.Screen.{method}",
+        ]
+    )
+    if not result.success:
+        raise RuntimeError(f"Brightness adjustment failed: {result.stderr or result.stdout}")
+
+
+def _bool_value(value: bool) -> str:
+    return "true" if value else "false"
