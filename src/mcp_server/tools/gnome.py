@@ -6,7 +6,7 @@ from logging import Logger
 from pathlib import Path
 from typing import Iterable, Literal, Optional, Sequence
 
-from mcp_server.models import ApplicationInfo, CommandResult, SystemDetails
+from mcp_server.models import ApplicationInfo, CommandResult, ExtensionInfo, SystemDetails
 from mcp_server.utils.logger import configure_logging
 from mcp_server.utils.shell import run_command
 
@@ -867,6 +867,179 @@ def set_touchpad_speed(speed: float) -> str:
     return f"Touchpad speed set to {speed}."
 
 
+def get_user_extensions_enabled() -> bool:
+    """Check whether GNOME user extensions are globally enabled.
+
+    Returns:
+        True if user extensions are allowed/enabled; False if globally disabled.
+
+    Raises:
+        RuntimeError: If the ``gsettings`` read fails.
+
+    References:
+        - GNOME Shell schema org.gnome.shell disable-user-extensions:
+          https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/main/data/org.gnome.shell.gschema.xml.in
+    """
+    raw: str = _gsettings_get("org.gnome.shell", "disable-user-extensions")
+    return raw.strip().lower() == "false"
+
+
+def set_user_extensions_enabled(enabled: bool) -> str:
+    """Globally enable or disable GNOME user extensions.
+
+    Args:
+        enabled: True to allow user extensions, False to disable them globally.
+
+    Returns:
+        Confirmation message describing the new state.
+
+    Raises:
+        RuntimeError: If the ``gsettings`` write fails.
+    """
+    _gsettings_set(
+        "org.gnome.shell", "disable-user-extensions", _bool_value(not enabled)
+    )
+    state = "enabled" if enabled else "disabled"
+    return f"Global user extensions set to {state}."
+
+
+def list_extensions(enabled_only: bool = False) -> list[ExtensionInfo]:
+    """Discover installed GNOME Shell extensions and their details.
+
+    Args:
+        enabled_only: When True, return only enabled extensions.
+
+    Returns:
+        Sorted list of extension details.
+
+    Raises:
+        RuntimeError: If user extensions are globally disabled or ``gnome-extensions`` CLI fails.
+    """
+    _verify_user_extensions_enabled()
+
+    list_cmd = ["gnome-extensions", "list"]
+    if enabled_only:
+        list_cmd.append("--enabled")
+    list_result: CommandResult = run_command(list_cmd)
+    if not list_result.success:
+        raise RuntimeError(
+            f"Failed to list extensions: {list_result.stderr or list_result.stdout}"
+        )
+    known_uuids = set(list_result.stdout.splitlines())
+
+    details_cmd = ["gnome-extensions", "list", "-d"]
+    if enabled_only:
+        details_cmd.append("--enabled")
+
+    details_result: CommandResult = run_command(details_cmd)
+    if not details_result.success:
+        raise RuntimeError(
+            f"Failed to list extensions: {details_result.stderr or details_result.stdout}"
+        )
+
+    extensions: list[ExtensionInfo] = _parse_extension_blocks(
+        details_result.stdout, known_uuids=known_uuids
+    )
+    return sorted(extensions, key=lambda ext: (ext.name or ext.uuid).lower())
+
+
+def get_extension_info(uuid: str) -> ExtensionInfo:
+    """Retrieve detailed metadata for a specific extension.
+
+    Args:
+        uuid: Extension identifier, e.g. ``blur-my-shell@aunetx``.
+
+    Returns:
+        Populated ExtensionInfo instance.
+
+    Raises:
+        ValueError: If the extension is not found or UUID is empty.
+        RuntimeError: If user extensions are globally disabled or ``gnome-extensions`` CLI fails.
+    """
+    clean_uuid = uuid.strip()
+    if not clean_uuid:
+        raise ValueError("Extension UUID cannot be empty.")
+
+    _verify_user_extensions_enabled()
+
+    result: CommandResult = run_command(["gnome-extensions", "info", clean_uuid])
+    if not result.success:
+        raise ValueError(
+            f"Extension '{clean_uuid}' not found: {result.stderr or result.stdout}"
+        )
+
+    parsed = _parse_extension_blocks(result.stdout)
+    if not parsed:
+        raise ValueError(f"Extension '{clean_uuid}' metadata could not be parsed.")
+    return parsed[0]
+
+
+def enable_extension(uuid: str) -> str:
+    """Enable a GNOME Shell extension after verifying global extension support is active.
+
+    Args:
+        uuid: Extension identifier, e.g. ``blur-my-shell@aunetx``.
+
+    Returns:
+        Confirmation string on success.
+
+    Raises:
+        ValueError: If the extension UUID is empty or not found.
+        RuntimeError: If user extensions are globally disabled or enabling fails.
+    """
+    clean_uuid = uuid.strip()
+    if not clean_uuid:
+        raise ValueError("Extension UUID cannot be empty.")
+
+    _verify_user_extensions_enabled()
+
+    info_result: CommandResult = run_command(["gnome-extensions", "info", clean_uuid])
+    if not info_result.success:
+        raise ValueError(
+            f"Extension '{clean_uuid}' not found: {info_result.stderr or info_result.stdout}"
+        )
+
+    result: CommandResult = run_command(["gnome-extensions", "enable", clean_uuid])
+    if not result.success:
+        raise RuntimeError(
+            f"Failed to enable extension '{clean_uuid}': {result.stderr or result.stdout}"
+        )
+    return f"Extension '{clean_uuid}' enabled."
+
+
+def disable_extension(uuid: str) -> str:
+    """Disable a GNOME Shell extension after verifying global extension support is active.
+
+    Args:
+        uuid: Extension identifier, e.g. ``blur-my-shell@aunetx``.
+
+    Returns:
+        Confirmation string on success.
+
+    Raises:
+        ValueError: If the extension UUID is empty or not found.
+        RuntimeError: If user extensions are globally disabled or disabling fails.
+    """
+    clean_uuid = uuid.strip()
+    if not clean_uuid:
+        raise ValueError("Extension UUID cannot be empty.")
+
+    _verify_user_extensions_enabled()
+
+    info_result: CommandResult = run_command(["gnome-extensions", "info", clean_uuid])
+    if not info_result.success:
+        raise ValueError(
+            f"Extension '{clean_uuid}' not found: {info_result.stderr or info_result.stdout}"
+        )
+
+    result: CommandResult = run_command(["gnome-extensions", "disable", clean_uuid])
+    if not result.success:
+        raise RuntimeError(
+            f"Failed to disable extension '{clean_uuid}': {result.stderr or result.stdout}"
+        )
+    return f"Extension '{clean_uuid}' disabled."
+
+
 def _command_output(command: Sequence[str]) -> str:
     """Execute a command and return stdout, falling back to stderr on failure.
 
@@ -1104,3 +1277,137 @@ def _bool_value(value: bool) -> str:
         gsettings-compatible boolean string.
     """
     return "true" if value else "false"
+
+
+def _verify_user_extensions_enabled() -> None:
+    """Verify that GNOME user extensions are globally enabled.
+
+    Raises:
+        RuntimeError: If user extensions are globally disabled.
+    """
+    if not get_user_extensions_enabled():
+        raise RuntimeError(
+            "GNOME user extensions are globally disabled ('disable-user-extensions' is true). "
+            "User extensions must be enabled before performing extension operations. "
+            "Use set_user_extensions_enabled(True) to enable global extension support."
+        )
+
+
+def _parse_single_extension_block(uuid: str, lines: list[str]) -> ExtensionInfo:
+    """Parse key-value properties from an extension block.
+
+    Args:
+        uuid: Extension identifier.
+        lines: Indented detail lines for the extension.
+
+    Returns:
+        Populated ExtensionInfo instance.
+    """
+    fields: dict[str, str] = {}
+    description_lines: list[str] = []
+    collecting_description = False
+
+    known_prefixes = (
+        "Name:",
+        "Description:",
+        "Path:",
+        "URL:",
+        "Version:",
+        "Enabled:",
+        "State:",
+    )
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        matched_key = None
+        for prefix in known_prefixes:
+            if stripped.startswith(prefix):
+                matched_key = prefix[:-1]
+                val = stripped[len(prefix) :].strip()
+                fields[matched_key] = val
+                break
+
+        if matched_key == "Description":
+            collecting_description = True
+            if fields["Description"]:
+                description_lines.append(fields["Description"])
+        elif matched_key:
+            collecting_description = False
+        elif collecting_description:
+            description_lines.append(stripped)
+
+    description = (
+        "\n".join(description_lines).strip()
+        if description_lines
+        else fields.get("Description")
+    )
+    enabled_str = fields.get("Enabled", "").lower()
+    enabled_bool = enabled_str in ("yes", "true", "1")
+
+    return ExtensionInfo(
+        uuid=uuid,
+        name=fields.get("Name"),
+        description=description or None,
+        enabled=enabled_bool,
+        state=fields.get("State"),
+        path=fields.get("Path"),
+        url=fields.get("URL"),
+        version=fields.get("Version"),
+    )
+
+
+def _parse_extension_blocks(
+    text: str, known_uuids: set[str] | Sequence[str] | None = None
+) -> list[ExtensionInfo]:
+    """Parse output from ``gnome-extensions list -d`` or ``gnome-extensions info``.
+
+    Args:
+        text: Raw text output from gnome-extensions CLI.
+        known_uuids: Optional set/sequence of valid extension UUIDs.
+
+    Returns:
+        List of ExtensionInfo model instances.
+    """
+    if not text.strip():
+        return []
+
+    valid_uuids = set(known_uuids) if known_uuids else None
+
+    lines = text.splitlines()
+    raw_blocks: list[tuple[str, list[str]]] = []
+    current_uuid: Optional[str] = None
+    current_lines: list[str] = []
+
+    for line in lines:
+        stripped = line.strip()
+        is_new_uuid = False
+
+        if stripped:
+            if valid_uuids is not None:
+                if stripped in valid_uuids and not line[0].isspace():
+                    is_new_uuid = True
+            else:
+                if not line[0].isspace() and " " not in stripped and ("@" in stripped or len(stripped.split(".")) > 1):
+                    is_new_uuid = True
+
+        if is_new_uuid:
+            if current_uuid:
+                raw_blocks.append((current_uuid, current_lines))
+            current_uuid = stripped
+            current_lines = []
+        elif current_uuid is not None:
+            current_lines.append(line)
+
+    if current_uuid:
+        raw_blocks.append((current_uuid, current_lines))
+
+    extensions: list[ExtensionInfo] = []
+    for uuid, block_lines in raw_blocks:
+        ext_info = _parse_single_extension_block(uuid, block_lines)
+        extensions.append(ext_info)
+
+    return extensions
+
