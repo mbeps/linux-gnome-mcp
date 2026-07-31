@@ -3,7 +3,7 @@ from typing import Literal, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from mcp_server.models import AnalysisResult, ApplicationInfo, SystemDetails, SystemMetrics
+from mcp_server.models import AnalysisResult, ApplicationInfo, ExtensionInfo, SystemDetails, SystemMetrics
 from mcp_server.tools import gnome
 from mcp_server.tools.system import calculate_health
 from mcp_server.utils.logger import configure_logging
@@ -541,6 +541,81 @@ def set_touchpad_speed(speed: float) -> str:
         Confirmation string from the GNOME tooling layer.
     """
     return gnome.set_touchpad_speed(speed)
+
+
+@mcp.tool()
+def get_user_extensions_enabled() -> bool:
+    """Check whether GNOME user extensions are globally enabled.
+
+    Returns:
+        True if user extensions are enabled; False if globally disabled.
+    """
+    return gnome.get_user_extensions_enabled()
+
+
+@mcp.tool()
+def set_user_extensions_enabled(enabled: bool) -> str:
+    """Globally enable or disable GNOME user extensions.
+
+    Args:
+        enabled: True to enable user extensions; False to disable them globally.
+
+    Returns:
+        Confirmation string from the GNOME tooling layer.
+    """
+    return gnome.set_user_extensions_enabled(enabled)
+
+
+@mcp.tool()
+def list_extensions(enabled_only: bool = False) -> list[ExtensionInfo]:
+    """List installed GNOME Shell extensions with their details and status.
+
+    Args:
+        enabled_only: When True, return only enabled extensions.
+
+    Returns:
+        List of extension details.
+    """
+    return gnome.list_extensions(enabled_only=enabled_only)
+
+
+@mcp.tool()
+def get_extension_info(uuid: str) -> ExtensionInfo:
+    """Retrieve detailed information for a specific GNOME Shell extension.
+
+    Args:
+        uuid: Extension identifier, e.g. ``blur-my-shell@aunetx``.
+
+    Returns:
+        Extension metadata including state and configuration.
+    """
+    return gnome.get_extension_info(uuid)
+
+
+@mcp.tool()
+def enable_extension(uuid: str) -> str:
+    """Enable a GNOME Shell extension after verifying global extension support is active.
+
+    Args:
+        uuid: Extension identifier, e.g. ``blur-my-shell@aunetx``.
+
+    Returns:
+        Confirmation string from the GNOME tooling layer.
+    """
+    return gnome.enable_extension(uuid)
+
+
+@mcp.tool()
+def disable_extension(uuid: str) -> str:
+    """Disable a GNOME Shell extension after verifying global extension support is active.
+
+    Args:
+        uuid: Extension identifier, e.g. ``blur-my-shell@aunetx``.
+
+    Returns:
+        Confirmation string from the GNOME tooling layer.
+    """
+    return gnome.disable_extension(uuid)
 
 
 def run() -> None:
