@@ -2,8 +2,7 @@ from typing import List
 
 import pytest
 
-from mcp_server import main
-from mcp_server.models import CommandResult, ExtensionInfo
+from mcp_server.models import CommandResult
 from mcp_server.tools import gnome
 
 SAMPLE_EXTENSIONS_OUTPUT = """blur-my-shell@aunetx
@@ -222,31 +221,3 @@ def test_enable_extension_empty_uuid() -> None:
     with pytest.raises(ValueError, match="cannot be empty"):
         gnome.enable_extension("  ")
 
-
-def test_main_tools_delegation(monkeypatch) -> None:
-    monkeypatch.setattr(gnome, "get_user_extensions_enabled", lambda: True)
-    monkeypatch.setattr(gnome, "set_user_extensions_enabled", lambda enabled: "ok")
-    monkeypatch.setattr(gnome, "list_extensions", lambda enabled_only=False: [])
-    monkeypatch.setattr(
-        gnome,
-        "get_extension_info",
-        lambda uuid: ExtensionInfo(
-            uuid=uuid,
-            name=None,
-            description=None,
-            enabled=False,
-            state=None,
-            path=None,
-            url=None,
-            version=None,
-        ),
-    )
-    monkeypatch.setattr(gnome, "enable_extension", lambda uuid: "enabled")
-    monkeypatch.setattr(gnome, "disable_extension", lambda uuid: "disabled")
-
-    assert main.get_user_extensions_enabled() is True
-    assert main.set_user_extensions_enabled(True) == "ok"
-    assert main.list_extensions() == []
-    assert main.get_extension_info("test@id").uuid == "test@id"
-    assert main.enable_extension("test@id") == "enabled"
-    assert main.disable_extension("test@id") == "disabled"

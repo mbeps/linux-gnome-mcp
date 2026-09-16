@@ -1,17 +1,31 @@
+"""Entrypoint and tool registration for the Linux GNOME Automations MCP server."""
+
+from __future__ import annotations
+
+import argparse
+import os
+from collections.abc import Sequence
 from logging import Logger
-from typing import Literal, Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from starlette.applications import Starlette
 
-from mcp_server.models import AnalysisResult, ApplicationInfo, ExtensionInfo, SystemDetails, SystemMetrics
+from mcp_server.models import AnalysisResult, SystemMetrics
 from mcp_server.tools import gnome
 from mcp_server.tools.system import calculate_health
 from mcp_server.utils.logger import configure_logging
 
-mcp: FastMCP = FastMCP("Linux-GNOME-Automations", dependencies=["pydantic"])
 logger: Logger = configure_logging("mcp_server.main")
 
+# Initialize MCP Server using SDK v2 stateless architecture
+mcp: MCPServer = MCPServer(
+    name="Linux-GNOME-Automations",
+    version="0.1.0",
+    description="GNOME & Fedora desktop automation MCP server",
+)
 
+
+# Register System Assessment Tool
 @mcp.tool()
 def analyze_metrics(metrics: SystemMetrics) -> AnalysisResult:
     """Analyze provided system metrics and return a health assessment.
@@ -26,6 +40,7 @@ def analyze_metrics(metrics: SystemMetrics) -> AnalysisResult:
     return calculate_health(metrics)
 
 
+# Register Configuration Resource
 @mcp.resource("config://app/defaults")
 def get_default_config() -> str:
     """Return a simple default configuration payload.
@@ -43,589 +58,128 @@ def get_default_config() -> str:
     """
 
 
-@mcp.tool()
-def set_color_scheme(preference: Literal["default", "prefer-dark"]) -> str:
-    """Switch between GNOME light and dark color schemes.
+# Register GNOME desktop automation tools directly
+_GNOME_TOOLS = (
+    gnome.set_color_scheme,
+    gnome.set_wallpaper,
+    gnome.set_night_light,
+    gnome.set_wallpaper_mode,
+    gnome.set_gtk_theme,
+    gnome.set_icon_theme,
+    gnome.set_font,
+    gnome.set_text_scaling,
+    gnome.set_night_light_temperature,
+    gnome.set_night_light_schedule_automatic,
+    gnome.set_night_light_schedule,
+    gnome.list_applications,
+    gnome.launch_application,
+    gnome.get_favorite_apps,
+    gnome.set_favorite_apps,
+    gnome.add_favorite_app,
+    gnome.shutdown_system,
+    gnome.reboot_system,
+    gnome.get_system_details,
+    gnome.set_wifi_enabled,
+    gnome.set_bluetooth_enabled,
+    gnome.set_networking_enabled,
+    gnome.set_airplane_mode,
+    gnome.set_power_profile,
+    gnome.lock_screen,
+    gnome.logout_session,
+    gnome.open_with_default,
+    gnome.brightness_step_up,
+    gnome.brightness_step_down,
+    gnome.move_to_trash,
+    gnome.empty_trash,
+    gnome.send_notification,
+    gnome.copy_to_clipboard,
+    gnome.paste_from_clipboard,
+    gnome.set_tap_to_click,
+    gnome.set_natural_scroll,
+    gnome.set_touchpad_speed,
+    gnome.get_user_extensions_enabled,
+    gnome.set_user_extensions_enabled,
+    gnome.list_extensions,
+    gnome.get_extension_info,
+    gnome.enable_extension,
+    gnome.disable_extension,
+)
+
+for _tool_fn in _GNOME_TOOLS:
+    mcp.add_tool(_tool_fn)
+
+# Register GNOME tools with custom public tool names
+mcp.add_tool(gnome.set_volume_percent, name="set_volume")
+mcp.add_tool(gnome.set_mute_state, name="update_mute")
+mcp.add_tool(gnome.media_control, name="control_media")
+
+
+# Export ASGI application configured for stateless Streamable HTTP
+app: Starlette = mcp.streamable_http_app(stateless_http=True)
+
+
+def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command line arguments for the MCP server.
 
     Args:
-        preference: ``"default"`` tracks system style; ``"prefer-dark"`` forces dark mode.
+        args: Optional sequence of argument strings to parse. If None, sys.argv is used.
 
     Returns:
-        Confirmation string from the GNOME tooling layer.
+        Parsed arguments namespace.
     """
-    return gnome.set_color_scheme(preference)
-
-
-@mcp.tool()
-def set_wallpaper(image_path: str) -> str:
-    """Set the desktop wallpaper for both light and dark modes.
-
-    Args:
-        image_path: Absolute or user-relative path to the wallpaper image.
-
-    Returns:
-        URI used for GNOME background keys.
-    """
-    return gnome.set_wallpaper(image_path)
-
-
-@mcp.tool()
-def set_night_light(enabled: bool) -> str:
-    """Enable or disable Night Light to adjust display color temperature.
-
-    Args:
-        enabled: ``True`` turns Night Light on; ``False`` turns it off.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_night_light(enabled)
-
-
-@mcp.tool()
-def set_wallpaper_mode(
-    option: Literal["none", "wallpaper", "centered", "scaled", "stretched", "zoom", "spanned"]
-) -> str:
-    """Configure how the wallpaper is rendered (zoom, centered, spanned, etc.).
-
-    Args:
-        option: Rendering mode supported by GNOME backgrounds.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_wallpaper_mode(option)
-
-
-@mcp.tool()
-def set_gtk_theme(theme: str) -> str:
-    """Set the GTK theme for legacy/non-libadwaita applications.
-
-    Args:
-        theme: Theme name available to GTK.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_gtk_theme(theme)
-
-
-@mcp.tool()
-def set_icon_theme(icon_theme: str) -> str:
-    """Set the icon theme.
-
-    Args:
-        icon_theme: Icon theme name discoverable by GNOME.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_icon_theme(icon_theme)
-
-
-@mcp.tool()
-def set_font(font_type: Literal["interface", "monospace", "document"], font_value: str) -> str:
-    """Update GNOME interface, monospace, or document font values.
-
-    Args:
-        font_type: Font category to change (interface, monospace, document).
-        font_value: Font description, e.g. ``'Cantarell 11'``.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_font(font_type, font_value)
-
-
-@mcp.tool()
-def set_text_scaling(factor: float) -> str:
-    """Adjust the global text scaling factor.
-
-    Args:
-        factor: Scaling multiplier; values greater than 1.0 enlarge text.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_text_scaling(factor)
-
-
-@mcp.tool()
-def set_night_light_temperature(kelvin: int) -> str:
-    """Set the Night Light temperature in Kelvin.
-
-    Args:
-        kelvin: Color temperature between 1000 and 10000.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_night_light_temperature(kelvin)
-
-
-@mcp.tool()
-def set_night_light_schedule_automatic(enabled: bool) -> str:
-    """Enable or disable automatic Night Light scheduling.
-
-    Args:
-        enabled: ``True`` follows sunrise/sunset; ``False`` disables auto scheduling.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_night_light_schedule_automatic(enabled)
-
-
-@mcp.tool()
-def set_night_light_schedule(start_hour: float, end_hour: float) -> str:
-    """Define a manual Night Light schedule (24h format).
-
-    Args:
-        start_hour: Start of the warm color period (0-24).
-        end_hour: End of the warm color period (0-24).
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_night_light_schedule(start_hour, end_hour)
-
-
-@mcp.tool()
-def list_applications(limit: int = 50) -> list[ApplicationInfo]:
-    """List installed applications discovered from .desktop files.
-
-    Args:
-        limit: Max number of applications to return; ``<=0`` returns all.
-
-    Returns:
-        Sorted application metadata.
-    """
-    return gnome.list_applications(limit=limit)
-
-
-@mcp.tool()
-def launch_application(desktop_id: str) -> str:
-    """Launch an application by its desktop identifier using gtk-launch.
-
-    Args:
-        desktop_id: Desktop ID with or without the ``.desktop`` suffix.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.launch_application(desktop_id)
-
-
-@mcp.tool()
-def get_favorite_apps() -> list[str]:
-    """Return the current GNOME Shell favorite applications list.
-
-    Returns:
-        Desktop IDs stored in GNOME favorites.
-    """
-    return gnome.get_favorite_apps()
-
-
-@mcp.tool()
-def set_favorite_apps(apps: list[str]) -> str:
-    """Overwrite the GNOME favorites list with the provided entries.
-
-    Args:
-        apps: Desktop IDs to store; duplicates are removed.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_favorite_apps(apps)
-
-
-@mcp.tool()
-def add_favorite_app(desktop_id: str) -> list[str]:
-    """Add a desktop id to the GNOME favorites list if not already present.
-
-    Args:
-        desktop_id: Identifier to add to favorites.
-
-    Returns:
-        Updated favorites list.
-    """
-    return gnome.add_favorite_app(desktop_id)
-
-
-@mcp.tool()
-def shutdown_system() -> str:
-    """Initiate a system shutdown without prompting.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.shutdown_system()
-
-
-@mcp.tool()
-def reboot_system() -> str:
-    """Initiate a system reboot without prompting.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.reboot_system()
-
-
-@mcp.tool()
-def get_system_details() -> SystemDetails:
-    """Return basic system information (kernel, OS, uptime, memory, storage).
-
-    Returns:
-        Snapshot of host details from standard CLI tools.
-    """
-    return gnome.get_system_details()
-
-
-@mcp.tool()
-def set_wifi_enabled(enabled: bool) -> str:
-    """Turn Wi-Fi on or off via nmcli.
-
-    Args:
-        enabled: ``True`` enables Wi-Fi; ``False`` disables it.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_wifi_enabled(enabled)
-
-
-@mcp.tool()
-def set_bluetooth_enabled(enabled: bool) -> str:
-    """Turn Bluetooth on or off via bluetoothctl.
-
-    Args:
-        enabled: ``True`` powers Bluetooth on; ``False`` powers it off.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_bluetooth_enabled(enabled)
-
-
-@mcp.tool()
-def set_networking_enabled(enabled: bool) -> str:
-    """Enable or disable all networking (wired and Wi-Fi) via nmcli.
-
-    Args:
-        enabled: ``True`` enables networking; ``False`` disables it.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_networking_enabled(enabled)
-
-
-@mcp.tool()
-def set_airplane_mode(enabled: bool) -> str:
-    """Toggle airplane mode (all radios off/on) via nmcli.
-
-    Args:
-        enabled: ``True`` turns all radios off; ``False`` turns them on.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_airplane_mode(enabled)
-
-
-@mcp.tool()
-def set_power_profile(mode: Literal["power-saver", "balanced", "performance"]) -> str:
-    """Switch between power profiles (power-saver, balanced, performance).
-
-    Args:
-        mode: Power profile supported by powerprofilesctl.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_power_profile(mode)
-
-
-@mcp.tool()
-def set_volume(volume_percent: int) -> str:
-    """Set system output volume percentage (0-150).
-
-    Args:
-        volume_percent: Target volume percent; supports amplification up to 150.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_volume_percent(volume_percent)
-
-
-@mcp.tool()
-def update_mute(action: Literal["toggle", "mute", "unmute"]) -> str:
-    """Toggle or force mute state on the default output sink.
-
-    Args:
-        action: Mute action to apply (toggle, mute, unmute).
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_mute_state(action)
-
-
-@mcp.tool()
-def control_media(action: Literal["play-pause", "next", "previous", "stop"]) -> str:
-    """Control media playback through playerctl.
-
-    Args:
-        action: Media command to send to the default player.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.media_control(action)
-
-
-@mcp.tool()
-def lock_screen() -> str:
-    """Lock the current GNOME session screen.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.lock_screen()
-
-
-@mcp.tool()
-def logout_session() -> str:
-    """Log out of the current session without prompting.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.logout_session()
-
-
-@mcp.tool()
-def open_with_default(target: str) -> str:
-    """Open a file path or URL with the default GNOME handler via gio.
-
-    Args:
-        target: Path or URL to open.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.open_with_default(target)
-
-
-@mcp.tool()
-def brightness_step_up() -> str:
-    """Increase brightness one step via the GNOME Settings Daemon.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.brightness_step_up()
-
-
-@mcp.tool()
-def brightness_step_down() -> str:
-    """Decrease brightness one step via the GNOME Settings Daemon.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.brightness_step_down()
-
-
-@mcp.tool()
-def move_to_trash(path: str) -> str:
-    """Move a file or directory to the Trash via gio.
-
-    Args:
-        path: Path to the file or directory to trash.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.move_to_trash(path)
-
-
-@mcp.tool()
-def empty_trash() -> str:
-    """Empty the Trash via gio.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.empty_trash()
-
-
-@mcp.tool()
-def send_notification(
-    summary: str,
-    body: Optional[str] = None,
-    urgency: Literal["low", "normal", "critical"] = "normal",
-) -> str:
-    """Send a desktop notification with optional body and urgency.
-
-    Args:
-        summary: Notification title.
-        body: Optional body text.
-        urgency: Urgency hint understood by ``notify-send``.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.send_notification(summary, body, urgency)
-
-
-@mcp.tool()
-def copy_to_clipboard(text: str) -> str:
-    """Copy plain text to the clipboard using wl-copy.
-
-    Args:
-        text: Text to copy to the clipboard.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.copy_to_clipboard(text)
-
-
-@mcp.tool()
-def paste_from_clipboard() -> str:
-    """Read text from the clipboard using wl-paste.
-
-    Returns:
-        Clipboard contents from the GNOME tooling layer.
-    """
-    return gnome.paste_from_clipboard()
-
-
-@mcp.tool()
-def set_tap_to_click(enabled: bool) -> str:
-    """Enable or disable touchpad tap-to-click.
-
-    Args:
-        enabled: ``True`` enables tap-to-click; ``False`` disables it.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_tap_to_click(enabled)
-
-
-@mcp.tool()
-def set_natural_scroll(enabled: bool) -> str:
-    """Enable or disable natural scrolling for the touchpad.
-
-    Args:
-        enabled: ``True`` enables natural scrolling; ``False`` disables it.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_natural_scroll(enabled)
-
-
-@mcp.tool()
-def set_touchpad_speed(speed: float) -> str:
-    """Set touchpad pointer speed (-1.0 to 1.0).
-
-    Args:
-        speed: Pointer speed; negative slows, positive accelerates.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_touchpad_speed(speed)
-
-
-@mcp.tool()
-def get_user_extensions_enabled() -> bool:
-    """Check whether GNOME user extensions are globally enabled.
-
-    Returns:
-        True if user extensions are enabled; False if globally disabled.
-    """
-    return gnome.get_user_extensions_enabled()
-
-
-@mcp.tool()
-def set_user_extensions_enabled(enabled: bool) -> str:
-    """Globally enable or disable GNOME user extensions.
-
-    Args:
-        enabled: True to enable user extensions; False to disable them globally.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.set_user_extensions_enabled(enabled)
-
-
-@mcp.tool()
-def list_extensions(enabled_only: bool = False) -> list[ExtensionInfo]:
-    """List installed GNOME Shell extensions with their details and status.
-
-    Args:
-        enabled_only: When True, return only enabled extensions.
-
-    Returns:
-        List of extension details.
-    """
-    return gnome.list_extensions(enabled_only=enabled_only)
-
-
-@mcp.tool()
-def get_extension_info(uuid: str) -> ExtensionInfo:
-    """Retrieve detailed information for a specific GNOME Shell extension.
-
-    Args:
-        uuid: Extension identifier, e.g. ``blur-my-shell@aunetx``.
-
-    Returns:
-        Extension metadata including state and configuration.
-    """
-    return gnome.get_extension_info(uuid)
-
-
-@mcp.tool()
-def enable_extension(uuid: str) -> str:
-    """Enable a GNOME Shell extension after verifying global extension support is active.
-
-    Args:
-        uuid: Extension identifier, e.g. ``blur-my-shell@aunetx``.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.enable_extension(uuid)
-
-
-@mcp.tool()
-def disable_extension(uuid: str) -> str:
-    """Disable a GNOME Shell extension after verifying global extension support is active.
-
-    Args:
-        uuid: Extension identifier, e.g. ``blur-my-shell@aunetx``.
-
-    Returns:
-        Confirmation string from the GNOME tooling layer.
-    """
-    return gnome.disable_extension(uuid)
-
-
-def run() -> None:
+    parser = argparse.ArgumentParser(description="Linux GNOME Automations MCP Server (v2 Stateless)")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "streamable-http", "sse"],
+        default=os.environ.get("MCP_TRANSPORT", "stdio"),
+        help="Transport protocol to use (default: stdio, env: MCP_TRANSPORT)",
+    )
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("MCP_HOST", "127.0.0.1"),
+        help="Host address for HTTP/SSE transports (default: 127.0.0.1, env: MCP_HOST)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("MCP_PORT", "8000")),
+        help="Port number for HTTP/SSE transports (default: 8000, env: MCP_PORT)",
+    )
+    parser.add_argument(
+        "--stateless",
+        action=argparse.BooleanOptionalAction,
+        default=os.environ.get("MCP_STATELESS_HTTP", "true").lower() in ("true", "1", "yes"),
+        help="Enable stateless HTTP mode for streamable-http (default: True, env: MCP_STATELESS_HTTP)",
+    )
+    return parser.parse_args(args)
+
+
+def run(args: Sequence[str] | None = None) -> None:
     """Entrypoint for launching the MCP server.
+
+    Args:
+        args: Optional CLI arguments. If None, command line arguments are parsed.
 
     Returns:
         Nothing.
     """
+    parsed = parse_args(args)
+    logger.info("Starting MCP server with transport: %s", parsed.transport)
     try:
-        mcp.run()
+        if parsed.transport == "stdio":
+            mcp.run(transport="stdio")
+        elif parsed.transport == "streamable-http":
+            logger.info("Stateless HTTP mode: %s", parsed.stateless)
+            mcp.run(
+                transport="streamable-http",
+                host=parsed.host,
+                port=parsed.port,
+                stateless_http=parsed.stateless,
+            )
+        elif parsed.transport == "sse":
+            mcp.run(transport="sse", host=parsed.host, port=parsed.port)
+        else:
+            raise ValueError(f"Unsupported transport: {parsed.transport}")
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception:
