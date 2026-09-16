@@ -1,11 +1,11 @@
-from collections.abc import AsyncIterator
 import json
+from collections.abc import AsyncIterator
 from unittest.mock import patch
 
 import pytest
+from mcp import Client
 from starlette.applications import Starlette
 
-from mcp import Client
 from mcp_server.main import app, mcp, parse_args
 from mcp_server.models import AnalysisResult
 

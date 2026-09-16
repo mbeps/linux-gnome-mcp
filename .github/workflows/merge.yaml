@@ -31,8 +31,8 @@ jobs:
       - name: Run Ruff
         run: uv run ruff check .
 
-      - name: Run mypy
-        run: uv run mypy src tests
+      - name: Run Pyrefly
+        run: uv run pyrefly check src
 
   test:
     name: Test (Python ${{ matrix.python-version }})

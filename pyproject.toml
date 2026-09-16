@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "mcp[cli]>=2.2.0",
-    "mypy>=1.19.0",
     "pydantic>=2.12.5",
 ]
 
@@ -22,10 +21,13 @@ packages = ["src/mcp_server"]
 
 [dependency-groups]
 dev = [
-    "mypy>=1.19.0",
+    "pyrefly>=0.60.0",
     "pytest>=8.3.3",
     "ruff>=0.14.9",
 ]
+
+[tool.pyrefly]
+search-path = ["src"]
 
 [tool.ruff]
 line-length = 120
