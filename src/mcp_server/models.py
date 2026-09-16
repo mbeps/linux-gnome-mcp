@@ -85,3 +85,28 @@ class SystemDetails(BaseModel):
     uptime: str = Field(..., description="Human-readable uptime string.")
     memory: str = Field(..., description="Memory usage summary (free -h).")
     storage: str = Field(..., description="Block devices summary (lsblk).")
+
+
+class ExtensionInfo(BaseModel):
+    """GNOME Shell extension metadata snapshot.
+
+    Attributes:
+        uuid: Unique extension identifier, e.g. ``blur-my-shell@aunetx``.
+        name: Human-readable extension name, if available.
+        description: Short description of the extension, if available.
+        enabled: True if the extension is enabled in GNOME Shell.
+        state: Current extension runtime state, e.g. ``ACTIVE``, ``INITIALIZED``, ``DISABLED``.
+        path: Installation directory path, if available.
+        url: Project homepage or repository URL, if available.
+        version: Extension version string or integer, if available.
+    """
+
+    uuid: str = Field(..., description="Unique extension identifier, e.g. blur-my-shell@aunetx.")
+    name: Optional[str] = Field(None, description="Human-readable extension name.")
+    description: Optional[str] = Field(None, description="Short description of the extension.")
+    enabled: bool = Field(False, description="True if the extension is enabled.")
+    state: Optional[str] = Field(None, description="Current runtime state, e.g. ACTIVE, DISABLED.")
+    path: Optional[str] = Field(None, description="Installation directory path.")
+    url: Optional[str] = Field(None, description="Homepage or repository URL.")
+    version: Optional[str] = Field(None, description="Extension version.")
+

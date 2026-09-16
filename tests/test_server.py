@@ -48,6 +48,12 @@ EXPECTED_TOOLS: set[str] = {
     "set_tap_to_click",
     "set_natural_scroll",
     "set_touchpad_speed",
+    "get_user_extensions_enabled",
+    "set_user_extensions_enabled",
+    "list_extensions",
+    "get_extension_info",
+    "enable_extension",
+    "disable_extension",
     "set_volume",
     "update_mute",
     "control_media",
@@ -78,7 +84,7 @@ async def test_tools_registered(mcp_client: Client) -> None:
     registered_names = {t.name for t in result.tools}
 
     assert registered_names == EXPECTED_TOOLS
-    assert len(result.tools) == 41
+    assert len(result.tools) == 47
 
     for tool in result.tools:
         assert tool.description, f"Tool {tool.name} has empty description"

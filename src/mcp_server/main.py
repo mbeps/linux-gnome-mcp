@@ -97,6 +97,12 @@ _GNOME_TOOLS = (
     gnome.set_tap_to_click,
     gnome.set_natural_scroll,
     gnome.set_touchpad_speed,
+    gnome.get_user_extensions_enabled,
+    gnome.set_user_extensions_enabled,
+    gnome.list_extensions,
+    gnome.get_extension_info,
+    gnome.enable_extension,
+    gnome.disable_extension,
 )
 
 for _tool_fn in _GNOME_TOOLS:
